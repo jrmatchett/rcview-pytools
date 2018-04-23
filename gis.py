@@ -1,28 +1,27 @@
 """Classes for creating a GIS object connected to the RC View Portal."""
 
-from arcgis import GIS
-from arcgis._impl.portalpy import Portal
+from arcgis import GIS as _GIS
+from arcgis._impl.portalpy import Portal as _Portal
 from arcgis._impl.connection import _ArcGISConnection, _normalize_url, _parse_hostname
-import arcgis.env
-from six.moves.urllib_parse import urlparse, urlencode
-import tempfile
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.by import By
-from selenium.common.exceptions import TimeoutException
-import time
+import arcgis.env as _arcgis_env
+from six.moves.urllib_parse import urlencode as _urlencode
+import tempfile as _tempfile
+from selenium import webdriver as _webdriver
+from selenium.webdriver.chrome.options import Options as _Options
+from selenium.webdriver.support.ui import WebDriverWait as _WebDriverWait
+from selenium.webdriver.support import expected_conditions as _EC
+from selenium.webdriver.common.by import By as _By
+from selenium.common.exceptions import TimeoutException as _TimeoutException
 try:
-    import keyring
-    has_keyring = True
+    import keyring as _keyring
+    _has_keyring = True
 except:
-    has_keyring = False
+    _has_keyring = False
 
-print_messages = True
+_print_messages = True
 
 
-class RCViewGIS(GIS):
+class RCViewGIS(_GIS):
     """An arcgis GIS object connected to the RC View Portal."""
     def __init__(self, email, password='use_keyring', keyring_name='RCView',
                  client_id='5Mp8pYtrnog7vMWb', verbose=True):
@@ -47,18 +46,18 @@ class RCViewGIS(GIS):
         client_id     Client ID (aka App ID) of a RC View Portal application.
         verbose       Prints login messages.
         """
-        global print_messages
-        print_messages = verbose
+        global _print_messages
+        _print_messages = verbose
 
-        if print_messages:
+        if _print_messages:
             print('Logging into RC View...', end='', flush=True)
 
         from arcgis._impl.tools import _Tools
 
         self._url = 'https://maps.rcview.redcross.org/portal'
         self._username = email
-        if has_keyring and password == 'use_keyring':
-            self._password = keyring.get_password(keyring_name, email)
+        if _has_keyring and password == 'use_keyring':
+            self._password = _keyring.get_password(keyring_name, email)
         else:
             self._password = password if not password == 'use_keyring' else None
         if not self._password:
@@ -76,21 +75,21 @@ class RCViewGIS(GIS):
         self._con = self._portal.con
         self._tools = _Tools(self)
 
-        arcgis.env.active_gis = self
+        _arcgis_env.active_gis = self
 
-        if print_messages:
+        if _print_messages:
             print('success.', flush=True)
 
 
-class _RCViewPortal(Portal):
+class _RCViewPortal(_Portal):
     # A Portal object for RC View.
     def __init__(self, url, username, password, client_id, key_file=None,
                  cert_file=None, expiration=60, referer=None, proxy_host=None,
                  proxy_port=None, connection=None,
-                 workdir=tempfile.gettempdir(), tokenurl=None,
+                 workdir=_tempfile.gettempdir(), tokenurl=None,
                  verify_cert=True):
 
-        if print_messages:
+        if _print_messages:
             print('connecting to portal...', end='', flush=True)
 
         self.hostname = _parse_hostname(url)
@@ -125,7 +124,7 @@ class _RCViewPortal(Portal):
 class _RCViewConnection(_ArcGISConnection):
     def oauth_authenticate(self, client_id, expiration):
         # Authenticate with RC View single-sign-on.
-        if print_messages:
+        if _print_messages:
             print('authenticating...', end='', flush=True)
 
         parameters = {
@@ -136,33 +135,33 @@ class _RCViewConnection(_ArcGISConnection):
         }
 
         url = self.baseurl + 'oauth2/authorize'
-        paramstring = urlencode(parameters)
+        paramstring = _urlencode(parameters)
         codeurl = "{}?{}".format(url, paramstring)
 
-        options = Options()
+        options = _Options()
         options.add_argument('--headless')
         options.add_argument('--disable-gpu')
-        driver = webdriver.Chrome(chrome_options=options)
+        driver = _webdriver.Chrome(chrome_options=options)
         driver.get(codeurl)
 
         delay = 10
         try:
-            using_redcross_element = WebDriverWait(driver, delay).\
-                until(EC.presence_of_element_located((By.ID, 'idp_Name')))
-        except TimeoutException:
+            using_redcross_element = _WebDriverWait(driver, delay).\
+                until(_EC.presence_of_element_located((_By.ID, 'idp_Name')))
+        except _TimeoutException:
             driver.quit()
             print('Accessing Red Cross single-sign-on took too much time.')
 
         using_redcross_element.click()
 
         try:
-            username_element = WebDriverWait(driver, delay).\
-                until(EC.presence_of_element_located((By.ID, 'ssologin-username')))
-            password_element = WebDriverWait(driver, delay).\
-                until(EC.presence_of_element_located((By.ID, 'ssologin-password')))
-            signin_element = WebDriverWait(driver, delay).\
-                until(EC.presence_of_element_located((By.ID, 'signin')))
-        except TimeoutException:
+            username_element = _WebDriverWait(driver, delay).\
+                until(_EC.presence_of_element_located((_By.ID, 'ssologin-username')))
+            password_element = _WebDriverWait(driver, delay).\
+                until(_EC.presence_of_element_located((_By.ID, 'ssologin-password')))
+            signin_element = _WebDriverWait(driver, delay).\
+                until(_EC.presence_of_element_located((_By.ID, 'signin')))
+        except _TimeoutException:
             driver.quit()
             print('Accessing Red Cross single-sign-on took too much time.')
 
@@ -171,9 +170,9 @@ class _RCViewConnection(_ArcGISConnection):
         signin_element.click()
 
         try:
-            code_element = WebDriverWait(driver, delay).\
-                until(EC.presence_of_element_located((By.ID, 'code')))
-        except TimeoutException:
+            code_element = _WebDriverWait(driver, delay).\
+                until(_EC.presence_of_element_located((_By.ID, 'code')))
+        except _TimeoutException:
             driver.quit()
             print('Receiving an authentication code took too much time.')
 
