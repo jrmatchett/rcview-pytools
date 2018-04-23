@@ -1,12 +1,11 @@
 """Tools for summarizing demographic information."""
 
-from arcgis.features import Feature
-from arcgis.features import FeatureLayer
-from arcgis.geometry.filters import intersects
+from arcgis.features import Feature as _Feature
+from arcgis.features import FeatureLayer as _FeatureLayer
+from arcgis.geometry.filters import intersects as _intersects
 from .geometry import Polygon
-from .extras import round_significant
-from pprint import pprint as pp
-from tqdm import tqdm
+from .extras import round_significant as _round_significant
+from tqdm import tqdm as _tqdm
 
 
 def population_housing(areas_layer, areas_query='population is null',
@@ -44,11 +43,11 @@ def population_housing(areas_layer, areas_query='population is null',
         where=areas_query,
         out_fields='objectid,population,housing,area_sq_mi,method',
         out_sr=areas_sr)
-    census_layer = FeatureLayer(url='https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Tracts_Blocks/MapServer/12')
+    census_layer = _FeatureLayer(url='https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Tracts_Blocks/MapServer/12')
 
     areas_summary = {}
     processing_issues = False
-    for i, area in tqdm(areas.df.iterrows(), total=len(areas)):
+    for i, area in _tqdm(areas.df.iterrows(), total=len(areas)):
         processing_errors = []
         processing_warnings = []
         # query census blocks intersecting area
@@ -59,7 +58,7 @@ def population_housing(areas_layer, areas_query='population is null',
                     .format(explain_validity(area_poly))
             )
 
-        area_filter = intersects(area.SHAPE, sr=areas_sr)
+        area_filter = _intersects(area.SHAPE, sr=areas_sr)
         census_blocks = census_layer.query(
             out_fields='OBJECTID,POP100,HU100,GEOID',
             geometry_filter=area_filter, out_sr=areas_sr)
@@ -127,16 +126,16 @@ def population_housing(areas_layer, areas_query='population is null',
 
         # update area values
         if method == 'all':
-            area.population = round_significant(pop_all)
-            area.housing = round_significant(hu_all)
+            area.population = _round_significant(pop_all)
+            area.housing = _round_significant(hu_all)
             area.method = 'all'
         elif method == 'gt50':
-            area.population = round_significant(pop_gt50)
-            area.housing = round_significant(hu_gt50)
+            area.population = _round_significant(pop_gt50)
+            area.housing = _round_significant(hu_gt50)
             area.method = 'greater than 50%'
         elif method == 'wtd':
-            area.population = round_significant(pop_wtd)
-            area.housing = round_significant(hu_wtd)
+            area.population = _round_significant(pop_wtd)
+            area.housing = _round_significant(hu_wtd)
             area.method = 'weighted'
         else:
             method = None
@@ -146,7 +145,7 @@ def population_housing(areas_layer, areas_query='population is null',
             area.drop('SHAPE', inplace=True)
             areas_summary[area.objectid]['update_results'] = \
                 areas_layer.edit_features(
-                updates=[Feature(attributes=area.to_dict())])['updateResults']
+                updates=[_Feature(attributes=area.to_dict())])['updateResults']
 
     print('\nFinished.\n', flush=True)
     if processing_issues:
