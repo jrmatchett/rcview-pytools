@@ -1,21 +1,26 @@
-"""Geometry class modifications and additions."""
+"""Geometry class modifications and additions.
+
+This module refines methods and properties in arcgis and Shapely geometry
+classes. See help for the Polygon, ShapelyPolygon, and ShapelyMultiPolygon
+classes for details.
+"""
 
 from arcgis.geometry import Polygon
 from shapely.geometry import Polygon as ShapelyPolygon
 from shapely.geometry import MultiPolygon as ShapelyMultiPolygon
-from shapely.geometry.polygon import LinearRing as ShapelyLinearRing
-from shapely.validation import explain_validity
-import warnings
+from shapely.geometry.polygon import LinearRing as _ShapelyLinearRing
+from shapely.validation import explain_validity as _explain_validity
+import warnings as _warnings
 
 
-def custom_formatwarning(msg, *args, **kwargs):
+def _custom_formatwarning(msg, *args, **kwargs):
     # include only exception category and message
     return '{}: {}\n'.format(args[0].__name__, msg)
 
-warnings.formatwarning = custom_formatwarning
+_warnings.formatwarning = _custom_formatwarning
 
 
-def as_shapely2(self, fix_self_intersections=True, warn_invalid=True):
+def _as_shapely2(self, fix_self_intersections=True, warn_invalid=True):
     """Return a Shapely [Mulit]Polygon.
 
     Alternative to arcgis as_shapely which handles polygons with holes and fixes
@@ -28,7 +33,7 @@ def as_shapely2(self, fix_self_intersections=True, warn_invalid=True):
     """
     # extract exterior and interior rings
     exterior_rings, interior_rings = [], []
-    for ring in map(ShapelyLinearRing, self.rings):
+    for ring in map(_ShapelyLinearRing, self.rings):
         interior_rings.append(ring) if ring.is_ccw else exterior_rings.append(ring)
 
     # create polygons for each exterior ring
@@ -54,7 +59,7 @@ def as_shapely2(self, fix_self_intersections=True, warn_invalid=True):
 
     # check validity and fix any self-intersecting rings
     if not poly_shp.is_valid:
-        invalid_reason = explain_validity(poly_shp)
+        invalid_reason = _explain_validity(poly_shp)
         invalid_message = 'Polygon is not valid ({})'.format(invalid_reason)
         if 'Self-intersection' in invalid_reason and fix_self_intersections:
             # fix with buffer trick
@@ -62,27 +67,27 @@ def as_shapely2(self, fix_self_intersections=True, warn_invalid=True):
             invalid_message += '; self-intersections were automatically fixed'
         if warn_invalid:
             invalid_message += '.'
-            warnings.simplefilter('always', UserWarning)
-            warnings.warn(invalid_message)
+            _warnings.simplefilter('always', UserWarning)
+            _warnings.warn(invalid_message)
 
     return poly_shp
 
-Polygon.as_shapely2 = as_shapely2
+Polygon.as_shapely2 = _as_shapely2
 
 
-def as_shapely(self):
+def _as_shapely(self):
     """Return a Shapely [Multi]Polygon.
 
-    Overrides the arcgis version, returning a properly-constructed Shapely
+    Overrides the arcgis method, returning a properly-constructed Shapely
     geometry using the as_shapely2 method. Self-intersecting rings are not
     automatically fixed.
     """
     return self.as_shapely2(False, True)
 
-Polygon.as_shapely = property(as_shapely)
+Polygon.as_shapely = property(_as_shapely)
 
 
-def as_arcgis(self, spatial_reference):
+def _as_arcgis(self, spatial_reference):
     """Return an arcgis Polygon.
 
     Arguments:
@@ -101,5 +106,5 @@ def as_arcgis(self, spatial_reference):
     rings = [list(r.__geo_interface__['coordinates']) for r in linear_rings]
     return Polygon({'rings': rings, 'spatialReference': spatial_reference})
 
-ShapelyPolygon.as_arcgis = as_arcgis
-ShapelyMultiPolygon.as_arcgis = as_arcgis
+ShapelyPolygon.as_arcgis = _as_arcgis
+ShapelyMultiPolygon.as_arcgis = _as_arcgis
