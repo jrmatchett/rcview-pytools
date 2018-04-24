@@ -15,7 +15,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='rcview_pytools',
-    version='0.1.0',
+    version='0.2.0',
     description='Python tools for RC View mapping',
     long_description=long_description,
     long_description_content_type='text/markdown',
@@ -30,7 +30,7 @@ setup(
     packages=find_packages(exclude=['contrib', 'docs', 'tests']),
     install_requires=[
         'arcgis>=1.4',
-        'mgrspy',
+        'mgrs',
         'numpy',
         'selenium',
         'shapely',

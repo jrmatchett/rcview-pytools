@@ -12,7 +12,7 @@ This package contains tools for working with the American Red Cross's RC View Ma
 
 * Install the `selenium`, `shapely`, `mgrs`, and `tqdm` packages using your preferred package manager ([pip](https://pypi.org/project/pip/) or [conda](https://conda.io/docs/)).
 
-* Install `rcview_pytools` by downloading the source code and running `python setup.py install`.
+* Install `rcview_pytools` by downloading the source code and running `python setup.py install` from the package's root directory.
 
 ## Getting Started
 

@@ -2,7 +2,7 @@
 
 import os as _os
 import urllib as _urllib
-from mgrspy import mgrs as _mgrs
+import mgrs as _mgrs
 import numpy as _numpy
 
 
@@ -57,15 +57,18 @@ def apple_maps_url(latitude, longitude, label='X'):
         latitude, longitude, _urllib.parse.quote(label))
 
 
-def usng(latitude, longitude, precision=4):
+def latlon_to_usng(latitude, longitude, precision=4):
     """US National Grid value for a point location.
 
+    The precision argument can range from 0 to 5, with 5 representing a 1-m
+    grid, 4 a 10-m grid, 3 a 100-m grid, and so on.
     Arguments:
     latitude   Latitude in decimal degrees.
     longitude  Longitude in decimal degrees.
     precision  Grid value precision.
     """
-    usng = _mgrs.toMgrs(latitude, longitude, precision)
+    m = _mgrs.MGRS()
+    usng = m.toMGRS(latitude, longitude, MGRSPrecision=precision).decode('ascii')
     usng_fmt = []
     usng_fmt.append(usng[0:3])
     usng_fmt.append(usng[3:5])
@@ -75,3 +78,14 @@ def usng(latitude, longitude, precision=4):
         usng_fmt.append(gc[0:idx_split])
         usng_fmt.append(gc[idx_split:])
     return ' '.join(usng_fmt)
+
+
+def usng_to_latlon(usng):
+    """Latitude and longitude for a US National Grid location.
+
+    Returns a tuple with latitude and longitude in decimal degrees.
+    Arguments:
+    usng  A US National Grid value.
+    """
+    m = _mgrs.MGRS()
+    return m.toLatLon(usng.replace(' ', '').encode('ascii'))
