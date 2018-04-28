@@ -39,21 +39,36 @@ def _population_housing_enrich(areas_layer, areas_query, areas_sr, enrich_id):
 
     # update area features
     print('updating...', end='', flush=True)
-    areas_updates = [
-        {'attributes': {
-                'objectid': f.origin_obj,
-                'population': _round_significant(f.TOTPOP_CY),
-                'housing': _round_significant(f.TOTHH_CY),
-                'method': 'Esri enrichment',
-                'area_sq_mi': f.SHAPE_y.area / 4046.86 / 640
+    areas_updates = []
+    areas_summary = {}
+
+    for i, f in enrich_df.iterrows():
+        area_sq_mi = f.SHAPE_y.area / 4046.86 / 640
+
+        areas_updates.append(
+            {'attributes': {
+                    'objectid': f.origin_obj,
+                    'population': _round_significant(f.TOTPOP_CY),
+                    'housing': _round_significant(f.TOTHH_CY),
+                    'method': 'Esri enrichment',
+                    'area_sq_mi': area_sq_mi
+                }
             }
+        )
+
+        areas_summary[f.origin_obj] = {
+            'area_sq_mi': area_sq_mi,
+            'hu_enrich': f.TOTHH_CY,
+            'pop_enrich': f.TOTPOP_CY,
         }
-        for i, f in enrich_df.iterrows()]
 
     update_results = areas_layer.edit_features(updates=areas_updates)
-    areas_new =  areas_layer.query(where=areas_query)
+
+    for k, v in areas_summary.items():
+        v['update_results'] = [x for x in update_results['updateResults'] if x['objectId'] == int(k)]
+
     print('finished.', flush=True)
-    return areas_new
+    return areas_summary
 
 
 def population_housing(areas_layer, areas_query='population is null',
@@ -62,11 +77,9 @@ def population_housing(areas_layer, areas_query='population is null',
     """Calculates and updates population and housing units within areas.
 
     Returns a list of population ('pop') and housing unit ('hu') counts
-    (unrounded) for each area. Item keys are the feature objectids. The list
-    includes counts using each of the 4 summary methods (see below), while
-    the area layer values are updated using the technique specified for the
-    method argument. Updated population and housing values are rounded to 2
-    significant digits to avoid a false sense of precision.
+    (unrounded) for each area. Item keys are the feature objectids. Updated
+    population and housing values are rounded to 2 significant digits to avoid a
+    false sense of precision.
 
     Arguments:
     areas_layer  A polygon FeatureLayer. The layer must contain attributes named
@@ -95,6 +108,10 @@ def population_housing(areas_layer, areas_query='population is null',
     'enrich'  Utilizes Esri's GeoEnrichment service, providing estimates for the
               current year. This method consumes credits and is only available
               to RC View users having analysis privileges.
+
+    The 'all', 'gt50', and 'wtd' methods all use census block data from 2010,
+    while the 'enrich' method uses the most recent population and housing unit
+    projections developed by Esri.
     """
     if method == 'enrich':
         return _population_housing_enrich(areas_layer, areas_query, areas_sr,
