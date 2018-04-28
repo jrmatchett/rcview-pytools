@@ -5,6 +5,7 @@ from arcgis.features import FeatureLayer as _FeatureLayer
 from arcgis.geometry.filters import intersects as _intersects
 from .geometry import Polygon
 from .extras import round_significant as _round_significant
+from shapely.geometry import box as _box
 from tqdm import tqdm as _tqdm
 
 
@@ -39,6 +40,11 @@ def population_housing(areas_layer, areas_query='population is null',
             intersecting the area.
     """
     print('\nSummarizing areas...', flush=True)
+
+    def bbox(x):
+        b = x.bounds
+        return _box(b[0], b[1], b[2], b[3])
+
     areas = areas_layer.query(
         where=areas_query,
         out_fields='objectid,population,housing,area_sq_mi,method',
@@ -58,7 +64,8 @@ def population_housing(areas_layer, areas_query='population is null',
                     .format(explain_validity(area_poly))
             )
 
-        area_filter = _intersects(area.SHAPE, sr=areas_sr)
+        area_bbox = bbox(area_poly).as_arcgis({'wkid': areas_sr})
+        area_filter = _intersects(area_bbox, sr=areas_sr)
         census_blocks = census_layer.query(
             out_fields='OBJECTID,POP100,HU100,GEOID',
             geometry_filter=area_filter, out_sr=areas_sr)
