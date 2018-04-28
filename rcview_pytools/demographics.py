@@ -13,9 +13,10 @@ from tqdm import tqdm as _tqdm
 def _population_housing_enrich(areas_layer, areas_query, areas_sr, enrich_id):
     # query areas
     print('Querying areas...', end='', flush=True)
+    objectid = areas_layer.properties.objectIdField
     areas = areas_layer.query(
         where=areas_query,
-        out_fields='objectid,population,housing,area_sq_mi,method',
+        out_fields=objectid + ',population,housing,area_sq_mi,method',
         out_sr=areas_sr)
 
     # add areas to enrichment layer
@@ -27,7 +28,7 @@ def _population_housing_enrich(areas_layer, areas_query, areas_sr, enrich_id):
     enrich_features = [
         {'geometry': {'rings': f.geometry['rings'],
                       'spatialReference': areas.spatial_reference},
-         'attributes': {'origin_obj': f.get_value('objectid')}}
+         'attributes': {'origin_obj': f.get_value(objectid)}}
         for f in areas.features]
     add_results = enrich_layer.edit_features(adds=enrich_features)
 
@@ -35,7 +36,7 @@ def _population_housing_enrich(areas_layer, areas_query, areas_sr, enrich_id):
     enrich_fc = _enrich_layer(enrich_layer, country='US',
                               analysis_variables=['TOTPOP_CY', 'TOTHH_CY'],
                               gis=gis)
-    enrich_df = enrich_fc.query().df.merge(areas.df, left_on='origin_obj', right_on='objectid')
+    enrich_df = enrich_fc.query().df.merge(areas.df, left_on='origin_obj', right_on=objectid)
 
     # update area features
     print('updating...', end='', flush=True)
@@ -47,7 +48,7 @@ def _population_housing_enrich(areas_layer, areas_query, areas_sr, enrich_id):
 
         areas_updates.append(
             {'attributes': {
-                    'objectid': f.origin_obj,
+                    objectid: f.origin_obj,
                     'population': _round_significant(f.TOTPOP_CY),
                     'housing': _round_significant(f.TOTHH_CY),
                     'method': 'Esri enrichment',
@@ -72,8 +73,7 @@ def _population_housing_enrich(areas_layer, areas_query, areas_sr, enrich_id):
 
 
 def population_housing(areas_layer, areas_query='population is null',
-                       areas_sr=102039, method='gt50',
-                       enrich_id='c42dd79157064bb694702e091bef879c'):
+                       areas_sr=102039, method='gt50', enrich_id=None):
     """Calculates and updates population and housing units within areas.
 
     Returns a list of population ('pop') and housing unit ('hu') counts
@@ -83,7 +83,7 @@ def population_housing(areas_layer, areas_query='population is null',
 
     Arguments:
     areas_layer  A polygon FeatureLayer. The layer must contain attributes named
-                 'objectid', 'population' (integer), 'housing' (integer),
+                 'population' (integer), 'housing' (integer),
                  'area_sq_mi' (double), and 'method' (string). It also must be
                  editable by the GIS user.
     areas_query  Selection query to filter features for analysis.
@@ -122,9 +122,10 @@ def population_housing(areas_layer, areas_query='population is null',
         return _box(b[0], b[1], b[2], b[3])
 
     print('Querying areas...', end='', flush=True)
+    objectid = areas_layer.properties.objectIdField
     areas = areas_layer.query(
         where=areas_query,
-        out_fields='objectid,population,housing,area_sq_mi,method',
+        out_fields=objectid + ',population,housing,area_sq_mi,method',
         out_sr=areas_sr)
 
     print('summarizing...', flush=True)
@@ -190,7 +191,7 @@ def population_housing(areas_layer, areas_query='population is null',
 
             blocks_gt50 += int_prop > 0.5
 
-        areas_summary[area.objectid] = {
+        areas_summary[area[objectid]] = {
             'no_blocks_all': len(census_blocks),
             'no_blocks_gt50': blocks_gt50,
             'pop_all': pop_all,
@@ -204,10 +205,10 @@ def population_housing(areas_layer, areas_query='population is null',
 
         if processing_errors:
             processing_issues = True
-            areas_summary[area.objectid]['ERRORS'] = processing_errors
+            areas_summary[area[objectid]]['ERRORS'] = processing_errors
         if processing_warnings:
             processing_issues = True
-            areas_summary[area.objectid]['WARNINGS'] = processing_warnings
+            areas_summary[area[objectid]]['WARNINGS'] = processing_warnings
 
         # update area values
         if method == 'all':
@@ -228,7 +229,7 @@ def population_housing(areas_layer, areas_query='population is null',
         if method is not None:
             area.area_sq_mi = area_sq_mi
             area.drop('SHAPE', inplace=True)
-            areas_summary[area.objectid]['update_results'] = \
+            areas_summary[area[objectid]]['update_results'] = \
                 areas_layer.edit_features(
                 updates=[_Feature(attributes=area.to_dict())])['updateResults']
 
