@@ -6,7 +6,6 @@ from arcgis.geometry.filters import intersects as _intersects
 from arcgis.features.analysis import enrich_layer as _enrich_layer
 from .geometry import Polygon
 from .extras import round_significant as _round_significant
-from shapely.geometry import box as _box
 from tqdm import tqdm as _tqdm
 
 
@@ -117,10 +116,6 @@ def population_housing(areas_layer, areas_query='population is null',
         return _population_housing_enrich(areas_layer, areas_query, areas_sr,
                                           enrich_id)
 
-    def bbox(x):
-        b = x.bounds
-        return _box(b[0], b[1], b[2], b[3])
-
     print('Querying areas...', end='', flush=True)
     objectid = areas_layer.properties.objectIdField
     areas = areas_layer.query(
@@ -143,7 +138,7 @@ def population_housing(areas_layer, areas_query='population is null',
                     .format(explain_validity(area_poly))
             )
 
-        area_bbox = bbox(area_poly).as_arcgis({'wkid': areas_sr})
+        area_bbox = area_poly.envelope.as_arcgis({'wkid': areas_sr})
         area_filter = _intersects(area_bbox, sr=areas_sr)
         census_blocks = census_layer.query(
             out_fields='OBJECTID,POP100,HU100,GEOID',

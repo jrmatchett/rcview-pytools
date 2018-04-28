@@ -11,6 +11,11 @@ from shapely.geometry import MultiPolygon as ShapelyMultiPolygon
 from shapely.geometry.polygon import LinearRing as _ShapelyLinearRing
 from shapely.validation import explain_validity as _explain_validity
 import warnings as _warnings
+try:
+    import arcpy
+    _has_arcpy = True
+except:
+    _has_arcpy = False
 
 
 def _custom_formatwarning(msg, *args, **kwargs):
@@ -84,7 +89,8 @@ def _as_shapely(self):
     """
     return self.as_shapely2(False, True)
 
-Polygon.as_shapely = property(_as_shapely)
+if not _has_arcpy:
+    Polygon.as_shapely = property(_as_shapely)
 
 
 def _as_arcgis(self, spatial_reference):
