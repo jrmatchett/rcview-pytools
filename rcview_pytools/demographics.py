@@ -3,19 +3,67 @@
 from arcgis.features import Feature as _Feature
 from arcgis.features import FeatureLayer as _FeatureLayer
 from arcgis.geometry.filters import intersects as _intersects
+from arcgis.features.analysis import enrich_layer as _enrich_layer
 from .geometry import Polygon
 from .extras import round_significant as _round_significant
 from shapely.geometry import box as _box
 from tqdm import tqdm as _tqdm
 
 
+def _population_housing_enrich(areas_layer, areas_query, areas_sr, enrich_id):
+    # query areas
+    print('Querying areas...', end='', flush=True)
+    areas = areas_layer.query(
+        where=areas_query,
+        out_fields='objectid,population,housing,area_sq_mi,method',
+        out_sr=areas_sr)
+
+    # add areas to enrichment layer
+    print('summarizing...', end='', flush=True)
+    gis = areas_layer.container._gis
+    enrich_item = gis.content.get(enrich_id)
+    enrich_layer = enrich_item.layers[0]
+    del_results = enrich_layer.delete_features(where='1=1')
+    enrich_features = [
+        {'geometry': {'rings': f.geometry['rings'],
+                      'spatialReference': areas.spatial_reference},
+         'attributes': {'origin_obj': f.get_value('objectid')}}
+        for f in areas.features]
+    add_results = enrich_layer.edit_features(adds=enrich_features)
+
+    # enrich with current population and housing
+    enrich_fc = _enrich_layer(enrich_layer, country='US',
+                              analysis_variables=['TOTPOP_CY', 'TOTHH_CY'],
+                              gis=gis)
+    enrich_df = enrich_fc.query().df.merge(areas.df, left_on='origin_obj', right_on='objectid')
+
+    # update area features
+    print('updating...', end='', flush=True)
+    areas_updates = [
+        {'attributes': {
+                'objectid': f.origin_obj,
+                'population': _round_significant(f.TOTPOP_CY),
+                'housing': _round_significant(f.TOTHH_CY),
+                'method': 'Esri enrichment',
+                'area_sq_mi': f.SHAPE_y.area / 4046.86 / 640
+            }
+        }
+        for i, f in enrich_df.iterrows()]
+
+    update_results = areas_layer.edit_features(updates=areas_updates)
+    areas_new =  areas_layer.query(where=areas_query)
+    print('finished.', flush=True)
+    return areas_new
+
+
 def population_housing(areas_layer, areas_query='population is null',
-                       areas_sr=102039, method='gt50'):
+                       areas_sr=102039, method='gt50',
+                       enrich_id='c42dd79157064bb694702e091bef879c'):
     """Calculates and updates population and housing units within areas.
 
     Returns a list of population ('pop') and housing unit ('hu') counts
     (unrounded) for each area. Item keys are the feature objectids. The list
-    includes counts using each of the 3 summary methods (see below), while
+    includes counts using each of the 4 summary methods (see below), while
     the area layer values are updated using the technique specified for the
     method argument. Updated population and housing values are rounded to 2
     significant digits to avoid a false sense of precision.
@@ -31,26 +79,39 @@ def population_housing(areas_layer, areas_query='population is null',
                  continental US. If another spatial reference is specified, its
                  measurement units must be in meters.
     method       Method used for feature layer population and housing unit
-                 counts ('all', 'gt50', or 'wtd').
+                 counts ('all', 'gt50', 'wtd', 'enrich').
+    enrich_id    If using the 'enrich' method, the item ID of a RC View hosted
+                 feature layer that is used to temporarily store polygons that
+                 will be enriched. The layer must have a long integer attribute
+                 named 'origin_obj', which is used to store the object ids of
+                 the analysis areas.
 
     Summary method details:
-    'all'   Includes all census blocks intersecting the area.
-    'gt50'  Includes only census blocks where >50% of area intersects the area.
-    'wtd'   Weights census block values by the proportion of the block
-            intersecting the area.
+    'all'     Includes all census blocks intersecting the area.
+    'gt50'    Includes only census blocks where >50% of the block intersects the
+              area.
+    'wtd'     Weights census block values by the proportion of the block
+              intersecting the area.
+    'enrich'  Utilizes Esri's GeoEnrichment service, providing estimates for the
+              current year. This method consumes credits and is only available
+              to RC View users having analysis privileges.
     """
-    print('\nSummarizing areas...', flush=True)
+    if method == 'enrich':
+        return _population_housing_enrich(areas_layer, areas_query, areas_sr,
+                                          enrich_id)
 
     def bbox(x):
         b = x.bounds
         return _box(b[0], b[1], b[2], b[3])
 
+    print('Querying areas...', end='', flush=True)
     areas = areas_layer.query(
         where=areas_query,
         out_fields='objectid,population,housing,area_sq_mi,method',
         out_sr=areas_sr)
-    census_layer = _FeatureLayer(url='https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Tracts_Blocks/MapServer/12')
 
+    print('summarizing...', flush=True)
+    census_layer = _FeatureLayer(url='https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Tracts_Blocks/MapServer/12')
     areas_summary = {}
     processing_issues = False
     for i, area in _tqdm(areas.df.iterrows(), total=len(areas)):
@@ -154,7 +215,7 @@ def population_housing(areas_layer, areas_query='population is null',
                 areas_layer.edit_features(
                 updates=[_Feature(attributes=area.to_dict())])['updateResults']
 
-    print('\nFinished.\n', flush=True)
+    print('finished.', flush=True)
     if processing_issues:
         print('WARNING: There were some processing issues. See results for details.\n',
                flush=True)
