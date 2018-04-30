@@ -7,7 +7,7 @@ from arcgis.features.analysis import enrich_layer as _enrich_layer
 from .geometry import Polygon
 from .extras import round_significant as _round_significant
 from tqdm import tqdm as _tqdm
-from .extras import RCSpinner as _RCSpinner
+from .extras import RCActivityIndicator as _RCSpinner
 
 
 def _population_housing_enrich(areas_layer, areas_query, areas_sr, enrich_id):

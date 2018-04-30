@@ -13,10 +13,9 @@ from selenium.webdriver.support import expected_conditions as _EC
 from selenium.webdriver.common.by import By as _By
 from selenium.common.exceptions import TimeoutException as _TimeoutException
 import keyring as _keyring
-from .extras import RCSpinner as _RCSpinner
+from .extras import RCActivityIndicator as _RCSpinner
 
 _print_messages = True
-_spinner = _RCSpinner('Logging into RC View')
 
 
 class RCViewGIS(_GIS):
@@ -48,7 +47,10 @@ class RCViewGIS(_GIS):
         _print_messages = verbose
 
         if _print_messages:
-            _spinner.start()
+            self._spinner = _RCSpinner('Logging into RC View')
+            self._spinner.start()
+        else:
+            self._spinner=None
 
         from arcgis._impl.tools import _Tools
 
@@ -69,15 +71,15 @@ class RCViewGIS(_GIS):
         self._datastores_list = None
         self._portal = _RCViewPortal(
             url=self._url, username=self._username,
-            password=self._password, client_id=self._client_id)
+            password=self._password, client_id=self._client_id,
+            spinner=self._spinner)
         self._con = self._portal.con
         self._tools = _Tools(self)
 
         _arcgis_env.active_gis = self
 
         if _print_messages:
-            _spinner.succeed('Login successful')
-
+            self._spinner.succeed('Login successful')
 
 
 class _RCViewPortal(_Portal):
@@ -86,10 +88,7 @@ class _RCViewPortal(_Portal):
                  cert_file=None, expiration=60, referer=None, proxy_host=None,
                  proxy_port=None, connection=None,
                  workdir=_tempfile.gettempdir(), tokenurl=None,
-                 verify_cert=True):
-
-        if _print_messages:
-            _spinner.text = 'Connecting to portal'
+                 verify_cert=True, spinner=None):
 
         self.hostname = _parse_hostname(url)
         self.workdir = workdir
@@ -103,6 +102,10 @@ class _RCViewPortal(_Portal):
         self._regions = None
         self._is_pre_162 = False
         self._is_pre_21 = False
+        self._spinner = spinner
+
+        if _print_messages:
+            self._spinner.text = 'Connecting to portal'
 
         self.con = _RCViewConnection(baseurl=self.resturl,
                                      tokenurl=tokenurl,
@@ -116,15 +119,19 @@ class _RCViewPortal(_Portal):
                                      proxy_host=proxy_host,
                                      proxy_port=proxy_port,
                                      verify_cert=verify_cert,
-                                     client_id=client_id)
+                                     client_id=client_id,
+                                     spinner=self._spinner)
         self.get_properties(True)
 
 
 class _RCViewConnection(_ArcGISConnection):
+    def __init__(self, *args, **kwargs):
+        self._spinner = kwargs.pop('spinner')
+        super().__init__(*args, **kwargs)
     def oauth_authenticate(self, client_id, expiration):
         # Authenticate with RC View single-sign-on.
         if _print_messages:
-            _spinner.text = 'Authenticating user'
+            self._spinner.text = 'Authenticating user'
 
         parameters = {
             'client_id': client_id,
@@ -150,7 +157,7 @@ class _RCViewConnection(_ArcGISConnection):
         except _TimeoutException:
             driver.quit()
             if _print_messages:
-                _spinner.fail('Accessing Red Cross single-sign-on took too much time.')
+                self._spinner.fail('Accessing Red Cross single-sign-on took too much time.')
 
         using_redcross_element.click()
 
@@ -164,7 +171,7 @@ class _RCViewConnection(_ArcGISConnection):
         except _TimeoutException:
             driver.quit()
             if _print_messages:
-                _spinner.fail('Accessing Red Cross single-sign-on took too much time.')
+                self._spinner.fail('Accessing Red Cross single-sign-on took too much time.')
 
         username_element.send_keys(self._username)
         password_element.send_keys(self._password)
@@ -176,7 +183,7 @@ class _RCViewConnection(_ArcGISConnection):
         except _TimeoutException:
             driver.quit()
             if _print_messages:
-                _spinner.fail('Receiving an authentication code took too much time.')
+                self._spinner.fail('Receiving an authentication code took too much time.')
 
         code = code_element.get_attribute('value')
         driver.quit()

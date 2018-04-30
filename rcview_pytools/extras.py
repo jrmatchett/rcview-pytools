@@ -4,7 +4,7 @@ import os as _os
 import urllib as _urllib
 import mgrs as _mgrs
 import numpy as _numpy
-from .constants import OS_WINDOWS
+from .constants import OS_WINDOWS, IN_IPYTHON
 from halo import Halo as _Halo
 
 
@@ -93,18 +93,60 @@ def usng_to_latlon(usng):
     return m.toLatLon(usng.replace(' ', '').encode('ascii'))
 
 
-class RCSpinner(_Halo):
-    """An activity spinner with a pulsating red cross."""
-    def __init__(self, text='Processing'):
-        """Construct a Red Cross spinner.
+if IN_IPYTHON:
+    # Halo spinners presently do not work in IPython and Jupyter Notebooks.
+    from IPython.display import display, HTML, update_display
+    import uuid
+    class RCActivityIndicator():
+        """An activity indicator."""
+        def __init__(self, text='Processing'):
+            """Construct a Red Cross activity indicator.
 
-        Arguments:
-        text  The text to display next to the spinner.
-        """
-        super().__init__(
-            text=text,
-            spinner=\
-                {'interval': 200, 'frames': [' ', '.', '+', '.']} if OS_WINDOWS \
-                else {'interval': 200, 'frames': ['∙', '+', '✛', '✚', '✛', '+']},
-            color='red'
-        )
+            Arguments:
+            text  The text to display next to the indicator.
+            """
+            self._symbol = '<font color="red">✚</font>'
+            self._text = text + '…'
+            self._display_id = uuid.uuid4().hex
+            display('', display_id=self._display_id)
+        def start(self):
+            self._print()
+        def stop(self):
+            pass
+        def stop_and_persist():
+            pass
+        def succeed(self, text):
+            self._symbol = '<font color="green">✔︎</font>'
+            self._text = text
+            self._print()
+        def fail(self, text):
+            self._symbol = '<font color="red">✖︎</font>'
+            self._text = text
+            self._print()
+        def _print(self):
+            update_display(HTML('{} <i>{}</i>'.format(self._symbol, self._text)),
+                           display_id=self._display_id)
+        @property
+        def text(self):
+            return self._text
+        @text.setter
+        def text(self, value):
+            self._text = value + '…'
+            self._print()
+
+else:
+    class RCActivityIndicator(_Halo):
+        """An activity indicator."""
+        def __init__(self, text='Processing'):
+            """Construct a Red Cross activity indicator.
+
+            Arguments:
+            text  The text to display next to the indicator.
+            """
+            super().__init__(
+                text=text,
+                spinner=\
+                    {'interval': 200, 'frames': [' ', '.', '+', '.']} if OS_WINDOWS \
+                    else {'interval': 200, 'frames': ['∙', '+', '✛', '✚', '✛', '+']},
+                color='red'
+            )
