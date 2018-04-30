@@ -8,5 +8,5 @@ evacs_layer = evacs_item.layers[0]
 
 pops = population_housing(evacs_layer, "type = 'Test'")
 
-#pops_enrich = population_housing(evacs_layer, "type = 'Test'", method='enrich',
-#                                 enrich_id='c42dd79157064bb694702e091bef879c')
+pops_enrich = population_housing(evacs_layer, "type = 'Test'", method='enrich',
+                                 enrich_id='c42dd79157064bb694702e091bef879c')
