@@ -139,8 +139,8 @@ class _RCViewConnection(_ArcGISConnection):
         codeurl = "{}?{}".format(url, paramstring)
 
         options = _Options()
-        options.add_argument('--headless')
-        options.add_argument('--disable-gpu')
+        options.set_headless(True)
+        options.add_argument('--log-level=3')
         driver = _webdriver.Chrome(chrome_options=options)
         driver.get(codeurl)
 
