@@ -35,7 +35,8 @@ setup(
         'selenium',
         'shapely',
         'six',
-        'tqdm'
+        'tqdm',
+        'halo'
     ],
     python_requires='~=3.5',
     project_urls={

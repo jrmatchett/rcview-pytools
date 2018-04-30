@@ -7,11 +7,15 @@ from arcgis.features.analysis import enrich_layer as _enrich_layer
 from .geometry import Polygon
 from .extras import round_significant as _round_significant
 from tqdm import tqdm as _tqdm
+from . import spinner as _spinner
 
 
 def _population_housing_enrich(areas_layer, areas_query, areas_sr, enrich_id):
+    if enrich_id is None:
+        raise ValueError('A feature layer item ID must be specified for the enrich_id argument.')
     # query areas
-    print('Querying areas...', end='', flush=True)
+    _spinner.text = 'Retrieving areas'
+    _spinner.start()
     objectid = areas_layer.properties.objectIdField
     areas = areas_layer.query(
         where=areas_query,
@@ -19,7 +23,7 @@ def _population_housing_enrich(areas_layer, areas_query, areas_sr, enrich_id):
         out_sr=areas_sr)
 
     # add areas to enrichment layer
-    print('summarizing...', end='', flush=True)
+    _spinner.text = 'Summarizing population and housing'
     gis = areas_layer.container._gis
     enrich_item = gis.content.get(enrich_id)
     enrich_layer = enrich_item.layers[0]
@@ -38,7 +42,7 @@ def _population_housing_enrich(areas_layer, areas_query, areas_sr, enrich_id):
     enrich_df = enrich_fc.query().df.merge(areas.df, left_on='origin_obj', right_on=objectid)
 
     # update area features
-    print('updating...', end='', flush=True)
+    _spinner.text = 'Updating areas'
     areas_updates = []
     areas_summary = {}
 
@@ -67,7 +71,7 @@ def _population_housing_enrich(areas_layer, areas_query, areas_sr, enrich_id):
     for k, v in areas_summary.items():
         v['update_results'] = [x for x in update_results['updateResults'] if x['objectId'] == int(k)]
 
-    print('finished.', flush=True)
+    _spinner.succeed('Finished updating areas')
     return areas_summary
 
 
@@ -116,17 +120,20 @@ def population_housing(areas_layer, areas_query='population is null',
         return _population_housing_enrich(areas_layer, areas_query, areas_sr,
                                           enrich_id)
 
-    print('Querying areas...', end='', flush=True)
+    _spinner.text = 'Retrieving areas'
+    _spinner.start()
     objectid = areas_layer.properties.objectIdField
     areas = areas_layer.query(
         where=areas_query,
         out_fields=objectid + ',population,housing,area_sq_mi,method',
         out_sr=areas_sr)
 
-    print('summarizing...', flush=True)
+    _spinner.text = 'Summarizing population and housing'
     census_layer = _FeatureLayer(url='https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Tracts_Blocks/MapServer/12')
     areas_summary = {}
     processing_issues = False
+    _spinner.stop_and_persist()
+    #print('  Summarizing population and housing', flush=True)
     for i, area in _tqdm(areas.df.iterrows(), total=len(areas)):
         processing_errors = []
         processing_warnings = []
@@ -228,7 +235,7 @@ def population_housing(areas_layer, areas_query='population is null',
                 areas_layer.edit_features(
                 updates=[_Feature(attributes=area.to_dict())])['updateResults']
 
-    print('finished.', flush=True)
+    _spinner.succeed('Finished updating areas')
     if processing_issues:
         print('WARNING: There were some processing issues. See results for details.\n',
                flush=True)

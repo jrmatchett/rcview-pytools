@@ -12,11 +12,8 @@ from selenium.webdriver.support.ui import WebDriverWait as _WebDriverWait
 from selenium.webdriver.support import expected_conditions as _EC
 from selenium.webdriver.common.by import By as _By
 from selenium.common.exceptions import TimeoutException as _TimeoutException
-try:
-    import keyring as _keyring
-    _has_keyring = True
-except:
-    _has_keyring = False
+import keyring as _keyring
+from . import spinner as _spinner
 
 _print_messages = True
 
@@ -50,16 +47,17 @@ class RCViewGIS(_GIS):
         _print_messages = verbose
 
         if _print_messages:
-            print('Logging into RC View...', end='', flush=True)
+            _spinner.text = 'Logging into RC View'
+            _spinner.start()
 
         from arcgis._impl.tools import _Tools
 
         self._url = 'https://maps.rcview.redcross.org/portal'
         self._username = email
-        if _has_keyring and password == 'use_keyring':
+        if password == 'use_keyring':
             self._password = _keyring.get_password(keyring_name, email)
         else:
-            self._password = password if not password == 'use_keyring' else None
+            self._password = password
         if not self._password:
             raise ValueError('Unable to set password. Please check the email, password, and keyring_name.')
         self._client_id = client_id
@@ -78,7 +76,8 @@ class RCViewGIS(_GIS):
         _arcgis_env.active_gis = self
 
         if _print_messages:
-            print('success.', flush=True)
+            _spinner.succeed('Login successful')
+
 
 
 class _RCViewPortal(_Portal):
@@ -90,7 +89,7 @@ class _RCViewPortal(_Portal):
                  verify_cert=True):
 
         if _print_messages:
-            print('connecting to portal...', end='', flush=True)
+            _spinner.text = 'Connecting to portal'
 
         self.hostname = _parse_hostname(url)
         self.workdir = workdir
@@ -125,7 +124,7 @@ class _RCViewConnection(_ArcGISConnection):
     def oauth_authenticate(self, client_id, expiration):
         # Authenticate with RC View single-sign-on.
         if _print_messages:
-            print('authenticating...', end='', flush=True)
+            _spinner.text = 'Authenticating user'
 
         parameters = {
             'client_id': client_id,
@@ -150,7 +149,8 @@ class _RCViewConnection(_ArcGISConnection):
                 until(_EC.presence_of_element_located((_By.ID, 'idp_Name')))
         except _TimeoutException:
             driver.quit()
-            print('Accessing Red Cross single-sign-on took too much time.')
+            if _print_messages:
+                _spinner.fail('Accessing Red Cross single-sign-on took too much time.')
 
         using_redcross_element.click()
 
@@ -163,7 +163,8 @@ class _RCViewConnection(_ArcGISConnection):
                 until(_EC.presence_of_element_located((_By.ID, 'signin')))
         except _TimeoutException:
             driver.quit()
-            print('Accessing Red Cross single-sign-on took too much time.')
+            if _print_messages:
+                _spinner.fail('Accessing Red Cross single-sign-on took too much time.')
 
         username_element.send_keys(self._username)
         password_element.send_keys(self._password)
@@ -174,7 +175,8 @@ class _RCViewConnection(_ArcGISConnection):
                 until(_EC.presence_of_element_located((_By.ID, 'code')))
         except _TimeoutException:
             driver.quit()
-            print('Receiving an authentication code took too much time.')
+            if _print_messages:
+                _spinner.fail('Receiving an authentication code took too much time.')
 
         code = code_element.get_attribute('value')
         driver.quit()
