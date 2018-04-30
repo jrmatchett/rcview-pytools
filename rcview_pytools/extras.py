@@ -1,9 +1,11 @@
-"""Various functions for working with GIS data."""
+"""Various classes and functions for working with GIS data."""
 
 import os as _os
 import urllib as _urllib
 import mgrs as _mgrs
 import numpy as _numpy
+from .constants import OS_WINDOWS
+from halo import Halo as _Halo
 
 
 def round_significant(x, p=2):
@@ -89,3 +91,20 @@ def usng_to_latlon(usng):
     """
     m = _mgrs.MGRS()
     return m.toLatLon(usng.replace(' ', '').encode('ascii'))
+
+
+class RCSpinner(_Halo):
+    """An activity spinner with a pulsating red cross."""
+    def __init__(self, text='Processing'):
+        """Construct a Red Cross spinner.
+
+        Arguments:
+        text  The text to display next to the spinner.
+        """
+        super().__init__(
+            text=text,
+            spinner=\
+                {'interval': 200, 'frames': [' ', '.', '+', '.']} if OS_WINDOWS \
+                else {'interval': 200, 'frames': ['∙', '+', '✛', '✚', '✛', '+']},
+            color='red'
+        )

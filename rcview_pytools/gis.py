@@ -13,9 +13,10 @@ from selenium.webdriver.support import expected_conditions as _EC
 from selenium.webdriver.common.by import By as _By
 from selenium.common.exceptions import TimeoutException as _TimeoutException
 import keyring as _keyring
-from . import spinner as _spinner
+from .extras import RCSpinner as _RCSpinner
 
 _print_messages = True
+_spinner = _RCSpinner('Logging into RC View')
 
 
 class RCViewGIS(_GIS):
@@ -47,7 +48,6 @@ class RCViewGIS(_GIS):
         _print_messages = verbose
 
         if _print_messages:
-            _spinner.text = 'Logging into RC View'
             _spinner.start()
 
         from arcgis._impl.tools import _Tools
