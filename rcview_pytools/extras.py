@@ -95,7 +95,7 @@ def usng_to_latlon(usng):
 
 if IN_IPYTHON:
     # Halo spinners presently do not work in IPython and Jupyter Notebooks.
-    from IPython.display import display, HTML, update_display
+    from IPython.display import display, HTML, clear_output
     import uuid
     class RCActivityIndicator():
         """An activity indicator."""
@@ -106,33 +106,45 @@ if IN_IPYTHON:
             text  The text to display next to the indicator.
             """
             self._symbol = '<font color="red">✚</font>'
-            self._text = text + '…'
-            self._display_id = uuid.uuid4().hex
-            display('', display_id=self._display_id)
+            self._active = False
+            self._text = text
+            self._display = None
         def start(self):
-            self._print()
+            self._active = True
+            if not self._display:
+                self._display = display(self._display_text,
+                                        display_id=uuid.uuid4().hex)
+            else:
+                self._print()
         def stop(self):
-            pass
-        def stop_and_persist():
-            pass
+            self._active = False
+            clear_output()
+        def stop_and_persist(self):
+            self._active = False
+            self._print()
         def succeed(self, text):
+            self._active = False
             self._symbol = '<font color="green">✔︎</font>'
             self._text = text
             self._print()
         def fail(self, text):
+            self._active = False
             self._symbol = '<font color="red">✖︎</font>'
             self._text = text
             self._print()
         def _print(self):
-            update_display(HTML('{} <i>{}</i>'.format(self._symbol, self._text)),
-                           display_id=self._display_id)
+            self._display.update(self._display_text)
         @property
         def text(self):
             return self._text
         @text.setter
         def text(self, value):
-            self._text = value + '…'
+            self._text = value
             self._print()
+        @property
+        def _display_text(self):
+            return HTML('{} <i>{}{}</i>'.format(
+                self._symbol, self._text, '…' if self._active else ''))
 
 else:
     class RCActivityIndicator(_Halo):
