@@ -132,6 +132,11 @@ if IN_IPYTHON:
             self._symbol = '<font color="red">✖︎</font>'
             self._text = text
             self._print()
+        def warn(self, text):
+            self._active = False
+            self._symbol = '<font color="gold">⚠︎︎︎</font>'
+            self._text = text
+            self._print()
         def _print(self):
             self._display.update(self._display_text)
         @property
