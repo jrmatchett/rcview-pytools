@@ -16,19 +16,21 @@ else:
     from tqdm import tqdm as _tqdm
 
 
-def districtsFromCounties(state, districts_list, districts_layer=None):
-    """Create district boundaries from counties.
+def define_districts(type, districts_list, state=None, districts_layer=None):
+    """Create incident district boundaries.
 
     Returns a FeatureSet and optionally creates or updates a feature layer of
-    district boundaries based on a list of counties in each district.
-    Generalized county boundaries are used to simply rendering in online maps.
-    Each feature has a 'name', 'number', and 'counties' attribute.
+    district boundaries based on a list of counties, chapters, or regions in
+    each district. Generalized boundaries are used to simply rendering in online
+    maps. Each feature has a 'name', 'number', and 'units' attribute.
     Arguments:
-    state           Full name of the state.
-    districts_list  A list of lists specifying counties within each district.
-                    The lists of counties should be in order of the desired
-                    district number. For example, 3 districts could be
-                    defined as:
+    type            Type of units used to define districts: 'counties' uses
+                    state counties, 'chapters' uses Red Cross chapters, and
+                    'regions' uses Red Cross regions.
+    districts_list  A list of lists specifying units within each district.
+                    The lists of units should be in order of the desired
+                    district number. For example, 3 county-based districts
+                    could be defined as:
 
                     districts = [
                         ['Tuolumne', 'Stanislaus'],
@@ -36,66 +38,97 @@ def districtsFromCounties(state, districts_list, districts_layer=None):
                         ['Fresno', 'Tulare']
                     ]
 
-                    'Mariposa', 'Madera', and 'Merced' will be named
-                    'District 1'; 'Fresno' and 'Visalia' named 'District 2', and
-                    so on.
+                    'Tuolumne' and 'Stanislaus' will be named 'District 1';
+                    'Mariposa', 'Madera', and 'Merced' will be 'District 2';
+                    and so on.
+
+                    For chapter- and region-based districts, the units
+                    are the ECODE and RCODE values, respectively. See
+                    https://maps.rcview.redcross.org/portal/home/item.html?id=ff62f2b66a204c6ab09b35e10e7c7821
+                    for chapter and region boundaries.
+
+    state           Full name of the state if creating county-based districts.
     districts_layer (optional) Either an existing FeatureLayer to update with
                     the district boundaries (any existing boundaries will be
-                    deleted) or a string specifying the name of a new
-                    FeatureLayer to be created. You must be logged into RC View
+                    deleted) or a string specifying the name of a new layer
+                    item to be created. You must be logged into RC View
                     (e.g., have created an RCViewGIS object) and have editting
                     permissions to the existing FeatureLayer or publishing
-                    rights to create a new layer.
+                    rights to create a new layer. Newly created layers with be
+                    located in the users 'Home' folder.
 
     """
     spinner = _RCSpinner('Creating district features')
     spinner.start()
     _warnings.simplefilter('always', UserWarning)
-    counties_layer = _FeatureLayer('http://services.arcgis.com/P3ePLMYs2RVChkJx/ArcGIS/rest/services/USA_Counties_Generalized/FeatureServer/0')
+
+    if type == 'counties':
+        if not state:
+            raise ValueError("The 'state' argument must be specified when using counties.")
+        units_layer = _FeatureLayer('http://services.arcgis.com/P3ePLMYs2RVChkJx/ArcGIS/rest/services/USA_Counties_Generalized/FeatureServer/0')
+        unit_attribute = 'NAME'
+    elif type == 'chapters':
+        units_layer = _FeatureLayer('https://services.arcgis.com/pGfbNJoYypmNq86F/arcgis/rest/services/2015_ARC_Chapter_Boundaries/FeatureServer/0')
+        unit_attribute = 'ECODE'
+    elif type == 'regions':
+         units_layer = _FeatureLayer('https://services.arcgis.com/pGfbNJoYypmNq86F/arcgis/rest/services/2015_ARC_Chapter_Boundaries/FeatureServer/0')
+         unit_attribute = 'RCODE'
+    else:
+         raise ValueError("The 'type' argument must be one of 'counties', 'chapters' or 'regions'.")
+
     spinner.stop_and_persist()
 
+    # create features
     district_features = []
-    for district, counties in _tqdm(enumerate(districts_list),
+    for district, units in _tqdm(enumerate(districts_list),
                                     total=len(districts_list),
                                     leave=False):
-        # query counties
-        query_string = "(STATE_NAME='{}') AND (NAME IN ({}))".format(
-            state.title(), ','.join(["'{}'".format(c) for c in counties]))
-        county_features = counties_layer.query(query_string)
+        # query units
+        units_string = ','.join(["'{}'".format(c) for c in units])
+        if type == 'counties':
+            query_string = "(STATE_NAME='{}') AND (NAME IN ({}))".format(
+                state.title(), units_string)
+        else:
+            query_string = "{} IN ({})".format(unit_attribute, units_string)
 
-        # warn user if any counties not found
-        if len(county_features) != len(counties):
+        units_features = units_layer.query(query_string)
+
+        # warn user if any units not found
+        unique_units = list(units_features.df[unit_attribute].unique())
+        unique_units.sort()
+        if len(unique_units) != len(units):
             warn_message = '{} not found'.format(
-                [c for c in counties if c not in list(county_features.df.NAME)])
+                [c for c in units if c not in unique_units])
             _warnings.warn(warn_message)
 
         # create district feature
-        district_polygon = _unary_union([p.as_shapely2() for p in county_features.df.SHAPE])
+        district_polygon = _unary_union([p.as_shapely2() for p in units_features.df.SHAPE])
         district_feature = _Feature(
-            geometry=district_polygon.as_arcgis(county_features.spatial_reference),
+            geometry=district_polygon.as_arcgis(units_features.spatial_reference),
             attributes={
                 'number': district + 1,
                 'name': 'District {}'.format(district + 1),
-                'counties': ', '.join(county_features.df.NAME.sort_values())
+                'units': ', '.join(unique_units)
             }
         )
         district_features.append(district_feature)
 
-    # create/update feature layer
     if isinstance(districts_layer, str):
-        spinner.text = 'Creating districts layer'
+        # create new feature layer
+        spinner.text = 'Creating districts layer (be patient)'
         spinner.start()
 
-        # check for existing item name
+        # check for existing item name and skip creation
         search_results = _env.active_gis.content.search(
             districts_layer, item_type='Feature Service'
         )
         if any([t.title == districts_layer for t in search_results]):
             districts_fset = _FeatureSet(district_features)
-            spinner.fail('The feature layer "{}" already exists. Either '\
+            spinner.fail('A feature layer named "{}" already exists. Either '\
                          'specify a new name or an existing layer to update.'\
                          .format(districts_layer))
         else:
+            # create layer
             try:
                 districts_item = _FeatureSet(district_features)\
                                  .df.drop('OBJECTID', axis=1)\
@@ -103,13 +136,18 @@ def districtsFromCounties(state, districts_list, districts_layer=None):
                                      title=districts_layer,
                                      tags='districts'
                                  )
-                districts_fset = districts_item.layers[0].query()
+                # change layer name
+                item_layer = districts_item.layers[0]
+                r = item_layer.manager.update_definition({'name': 'districts'})
+
+                districts_fset = item_layer.query()
                 spinner.succeed('Created ' + districts_layer + ' layer')
             except Exception as e:
                 districts_fset = _FeatureSet(district_features)
                 spinner.fail('Failed to create layer: {}'.format(e))
 
     elif isinstance(districts_layer, _FeatureLayer):
+        # update existing feature layer
         spinner.text = 'Updating districts layer'
         spinner.start()
         try:
@@ -130,6 +168,7 @@ def districtsFromCounties(state, districts_list, districts_layer=None):
         spinner.warn('The districts_layer argument must be a FeatureLayer, '\
                      'string, or None; No feature layer was created or updated')
         districts_fset = _FeatureSet(district_features)
+
     else:
         districts_fset = _FeatureSet(district_features)
         spinner.succeed('Created district features')
