@@ -16,6 +16,15 @@ else:
     from tqdm import tqdm as _tqdm
 
 
+def _districts_description(districts_df, type):
+    desc = 'This layer contains incident districts. Following are the '\
+            '{} within each district:<ul>'.format(type)
+    for i, d in districts_df.sort_values('name').iterrows():
+        desc += '<li>Distict {}: {}</li>'.format(d.number, d.units)
+    desc += '</ul>'
+    return {'description': desc}
+
+
 def define_districts(type, districts_list, state=None, districts_layer=None):
     """Create incident district boundaries.
 
@@ -140,7 +149,9 @@ def define_districts(type, districts_list, state=None, districts_layer=None):
                 item_layer = districts_item.layers[0]
                 r = item_layer.manager.update_definition({'name': 'districts'})
 
+                # update description
                 districts_fset = item_layer.query()
+                r = districts_item.update(_districts_description(districts_fset.df, type))
                 spinner.succeed('Created ' + districts_layer + ' layer')
             except Exception as e:
                 districts_fset = _FeatureSet(district_features)
@@ -155,7 +166,11 @@ def define_districts(type, districts_list, state=None, districts_layer=None):
             add_results = districts_layer.edit_features(adds=district_features)
             if all([a['success'] for a in add_results['addResults']]) and \
                    all([d['success'] for d in del_results['deleteResults']]):
+                # update description
                 districts_fset = districts_layer.query()
+                districts_item = _env.active_gis.content.get(
+                    districts_layer.properties.serviceItemId)
+                r = districts_item.update(_districts_description(districts_fset.df, type))
                 spinner.succeed('Updated districts layer')
             else:
                 districts_fset = _FeatureSet(district_features)
