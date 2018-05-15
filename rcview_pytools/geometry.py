@@ -6,6 +6,11 @@ classes for details.
 """
 
 from arcgis.geometry import Polygon
+from arcgis.geometry import Geometry
+from shapely.geometry import Point as ShapelyPoint
+from shapely.geometry import MultiPoint as ShapelyMultiPoint
+from shapely.geometry import LineString as ShapelyLineString
+from shapely.geometry import MultiLineString as ShapelyMultiLineString
 from shapely.geometry import Polygon as ShapelyPolygon
 from shapely.geometry import MultiPolygon as ShapelyMultiPolygon
 from shapely.geometry.polygon import LinearRing as _ShapelyLinearRing
@@ -90,23 +95,42 @@ if not HAS_ARCPY:
 
 
 def _as_arcgis(self, spatial_reference):
-    """Return an arcgis Polygon.
+    """Return an arcgis Geometry.
 
     Arguments:
-    spatial_reference  A spatial reference definition dictionary, for example
-                       {'wkid': 3857}.
+    spatial_reference  A spatial reference integer code or definition
+                       dictionary, for example {'wkid': 3857}
     """
-    linear_rings = []
-    if isinstance(self, ShapelyPolygon):
-        linear_rings += [self.exterior]
+
+    if isinstance(spatial_reference, int):
+        spatial_reference = {'wkid': spatial_reference}
+
+    if isinstance(self, ShapelyPoint) or \
+       isinstance(self, ShapelyMultiPoint) or \
+       isinstance(self, ShapelyLineString) or \
+       isinstance(self, ShapelyMultiLineString):
+        geom = Geometry(self.__geo_interface__)
+        geom['spatialReference'] = spatial_reference
+
+    elif isinstance(self, ShapelyPolygon):
+        linear_rings = [self.exterior]
         linear_rings += self.interiors
+        rings = [list(r.__geo_interface__['coordinates']) for r in linear_rings]
+        geom = Geometry({'rings': rings, 'spatialReference': spatial_reference})
+
     elif isinstance(self, ShapelyMultiPolygon):
+        linear_rings = []
         for poly in self.geoms:
             linear_rings += [poly.exterior]
             linear_rings += poly.interiors
+        rings = [list(r.__geo_interface__['coordinates']) for r in linear_rings]
+        geom = Geometry({'rings': rings, 'spatialReference': spatial_reference})
 
-    rings = [list(r.__geo_interface__['coordinates']) for r in linear_rings]
-    return Polygon({'rings': rings, 'spatialReference': spatial_reference})
+    return geom
 
+ShapelyPoint.as_arcgis = _as_arcgis
+ShapelyMultiPoint.as_arcgis = _as_arcgis
+ShapelyLineString.as_arcgis = _as_arcgis
+ShapelyMultiLineString.as_arcgis = _as_arcgis
 ShapelyPolygon.as_arcgis = _as_arcgis
 ShapelyMultiPolygon.as_arcgis = _as_arcgis
