@@ -15,8 +15,11 @@ from shapely.geometry import Polygon as ShapelyPolygon
 from shapely.geometry import MultiPolygon as ShapelyMultiPolygon
 from shapely.geometry.polygon import LinearRing as _ShapelyLinearRing
 from shapely.validation import explain_validity as _explain_validity
+from arcgis.features import SpatialDataFrame
+from geopandas import GeoDataFrame
 import warnings as _warnings
 from .constants import HAS_ARCPY
+import re as _re
 
 
 def _custom_formatwarning(msg, *args, **kwargs):
@@ -134,3 +137,38 @@ ShapelyLineString.as_arcgis = _as_arcgis
 ShapelyMultiLineString.as_arcgis = _as_arcgis
 ShapelyPolygon.as_arcgis = _as_arcgis
 ShapelyMultiPolygon.as_arcgis = _as_arcgis
+
+
+def _to_SpatialDataFrame(self, spatial_reference=None):
+    """Return an arcgis SpatialDataFrame.
+
+    Arguments:
+    spatial_reference  Either None (the default), a spatial reference integer
+                       code, or a definition dictionary (for example
+                       {'wkid': 3857}). If None, the spatial reference will be
+                       extracted from the GeoDataFrame if it is defined using an
+                       EPSG code.
+    """
+    if not spatial_reference:
+        crs = self.crs
+        if crs and 'init' in crs:
+            if isinstance(crs, dict):
+                crs = crs['init']
+            if 'epsg' in crs:
+                m = _re.search('epsg:(\d+)', crs)
+                if m:
+                    spatial_reference = int(m.groups()[0])
+
+    if not spatial_reference:
+        spatial_reference = 4326
+        _warnings.simplefilter('always', UserWarning)
+        _warnings.warn('Unable to extract a spatial reference, assuming latitude/longitude (wkid 4326).')
+
+    sdf = SpatialDataFrame(
+        data=self.drop('geom', axis=1),
+        geometry=[p.as_arcgis(spatial_reference) for p in self.geom]
+    )
+
+    return sdf
+
+GeoDataFrame.to_SpatialDataFrame = _to_SpatialDataFrame
