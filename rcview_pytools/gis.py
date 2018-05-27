@@ -21,7 +21,7 @@ _print_messages = True
 class RCViewGIS(_GIS):
     """An arcgis GIS object connected to the RC View Portal."""
     def __init__(self, email, password='use_keyring', keyring_name='RCView',
-                 client_id='5Mp8pYtrnog7vMWb', verbose=True):
+                 client_id='5Mp8pYtrnog7vMWb', verbose=True, tokens_file=None):
         """Construct an arcgis GIS object for the RC View Portal.
 
         The selenium python package and the ChromeDriver application must be
@@ -42,6 +42,9 @@ class RCViewGIS(_GIS):
         keyring_name  Name of the password keyring.
         client_id     Client ID (aka App ID) of a RC View Portal application.
         verbose       Prints login messages.
+        tokens_file  (optional) A file containing the access tokens from a
+                     previous login (created using the save_tokens method).
+                     Reusing previous tokens skips the authentication process.
         """
         global _print_messages
         _print_messages = verbose
@@ -69,10 +72,23 @@ class RCViewGIS(_GIS):
         self._con = None
         self._verify_cert = None
         self._datastores_list = None
+        self._existing_tokens = None
+        if tokens_file:
+            try:
+                with open(tokens_file) as f:
+                    lines = f.readlines()
+                    self._existing_tokens = {
+                        'token': lines[0].strip(),
+                        'refresh_token': lines[1].strip()
+                    }
+            except:
+                self._existing_tokens = None
+
         self._portal = _RCViewPortal(
             url=self._url, username=self._username,
             password=self._password, client_id=self._client_id,
-            spinner=self._spinner)
+            spinner=self._spinner,
+            existing_tokens=self._existing_tokens)
         self._con = self._portal.con
         self._tools = _Tools(self)
 
@@ -82,13 +98,23 @@ class RCViewGIS(_GIS):
             self._spinner.succeed('Login successful')
 
 
+    def save_tokens(self, file):
+        """Save tokens to a file.
+
+        Saves the current RCViewGIS object access tokens to a file so that they
+        can be provided to the 'tokens_file' argument.
+        """
+        with open(file, 'w') as f:
+            f.write('{}\n{}\n'.format(self._con._token, self._con._refresh_token))
+
+
 class _RCViewPortal(_Portal):
     # A Portal object for RC View.
     def __init__(self, url, username, password, client_id, key_file=None,
                  cert_file=None, expiration=60, referer=None, proxy_host=None,
                  proxy_port=None, connection=None,
                  workdir=_tempfile.gettempdir(), tokenurl=None,
-                 verify_cert=True, spinner=None):
+                 verify_cert=True, spinner=None, existing_tokens=None):
 
         self.hostname = _parse_hostname(url)
         self.workdir = workdir
@@ -103,6 +129,7 @@ class _RCViewPortal(_Portal):
         self._is_pre_162 = False
         self._is_pre_21 = False
         self._spinner = spinner
+        self._existing_tokens = existing_tokens
 
         if _print_messages:
             self._spinner.text = 'Connecting to portal'
@@ -120,18 +147,25 @@ class _RCViewPortal(_Portal):
                                      proxy_port=proxy_port,
                                      verify_cert=verify_cert,
                                      client_id=client_id,
-                                     spinner=self._spinner)
+                                     spinner=self._spinner,
+                                     existing_tokens=self._existing_tokens)
         self.get_properties(True)
 
 
 class _RCViewConnection(_ArcGISConnection):
     def __init__(self, *args, **kwargs):
         self._spinner = kwargs.pop('spinner')
+        self._existing_tokens = kwargs.pop('existing_tokens')
         super().__init__(*args, **kwargs)
     def oauth_authenticate(self, client_id, expiration):
         # Authenticate with RC View single-sign-on.
         if _print_messages:
             self._spinner.text = 'Authenticating user'
+
+        if self._existing_tokens:
+            self._refresh_token = self._existing_tokens['refresh_token']
+            self._token = self._existing_tokens['token']
+            return self._token
 
         parameters = {
             'client_id': client_id,
