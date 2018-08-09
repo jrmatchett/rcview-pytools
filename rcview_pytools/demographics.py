@@ -5,6 +5,7 @@ from arcgis.features import FeatureLayer as _FeatureLayer
 from arcgis.geometry.filters import intersects as _intersects
 from arcgis.features.analysis import enrich_layer as _enrich_layer
 from .geometry import Polygon
+from shapely.validation import explain_validity
 from .extras import round_significant as _round_significant
 from tqdm import tqdm as _tqdm
 from .extras import RCActivityIndicator as _RCSpinner
