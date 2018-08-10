@@ -200,11 +200,11 @@ class _RCViewConnection(_ArcGISConnection):
 
         try:
             username_element = _WebDriverWait(driver, delay).\
-                until(_EC.presence_of_element_located((_By.ID, 'ssologin-username')))
+                until(_EC.presence_of_element_located((_By.XPATH, '/html/body/main/div[4]/div/div/div/div/div/div/div/div[1]/div/div/div/div[4]/input')))
             password_element = _WebDriverWait(driver, delay).\
-                until(_EC.presence_of_element_located((_By.ID, 'ssologin-password')))
+                until(_EC.presence_of_element_located((_By.XPATH, '/html/body/main/div[4]/div/div/div/div/div/div/div/div[1]/div/div/div/div[5]/input')))
             signin_element = _WebDriverWait(driver, delay).\
-                until(_EC.presence_of_element_located((_By.ID, 'signin')))
+                until(_EC.presence_of_element_located((_By.XPATH, '/html/body/main/div[4]/div/div/div/div/div/div/div/div[1]/div/div/div/div[6]/button')))
         except _TimeoutException:
             driver.quit()
             if _print_messages:
