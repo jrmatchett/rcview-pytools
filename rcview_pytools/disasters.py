@@ -4,7 +4,10 @@ from arcgis import env as _env
 from arcgis.features import Feature as _Feature,\
                             FeatureSet as _FeatureSet,\
                             FeatureLayer as _FeatureLayer
+from arcgis.mapping import WebMap
 from shapely.ops import unary_union as _unary_union
+import re
+import json
 from .geometry import *
 from .gis import RCViewGIS as _RCViewGIS
 from .extras import RCActivityIndicator as _RCSpinner
@@ -189,3 +192,114 @@ def define_districts(type, districts_list, state=None, districts_layer=None):
         spinner.succeed('Created district features')
 
     return districts_fset
+
+
+def initialize_dro(
+    dro_id, gis,
+    dro_template_id='2df64ef2bc874bdb8393255375feb894',
+    sit_template_id='a1dbcdad380840249d26ccc520d1c441',
+    ops_template_id='e9c20858fdb342c9a6b0e514e7c9f9f7',
+    dir_template_id='9e36639d9da741138b475e05b2f79f14'
+    ):
+    """Initializes mapping items for a disaster relief operation.
+
+    Arguments:
+    dro_id           Disaster relief operation identifier.
+    gis              RCViewGIS object.
+    dro_template_id  Item ID of DRO feature file geodatabase template.
+    sit_template_id  Item ID of situational awareness web map template.
+    ops_template_id  Item ID of operations dashboard template.
+    dir_template_id  Item ID of director's brief story map template.
+    """
+    # create DRO folder
+    spinner = _RCSpinner('Creating folder')
+    spinner.start()
+    folders = gis.users.me.folders
+    if not dro_id in [f['title'] for f in folders]:
+        dro_folder = gis.content.create_folder(dro_id)
+        if not dro_folder:
+            spinner.fail('Failed to create DRO folder. Intialization aborted.')
+            return
+    else:
+        dro_folder = [f for f in folders if f['title'] == dro_id][0]
+
+    # copy DRO features template
+    spinner.text = 'Copying features template'
+    dro_id_under = re.sub('\W+', '_', dro_id)
+    dro_template_item = gis.content.get(dro_template_id)
+    dro_fgdb = dro_template_item.copy(title=dro_id_under + '_Features')
+    move_result = dro_fgdb.move(dro_folder)
+    if not move_result['success']:
+        spinner.fail('Failed to move features template to DRO folder. Intialization aborted.')
+        return
+
+    # publish DRO feature service
+    spinner.text = 'Publishing feature service'
+    dro_features = dro_fgdb.publish()
+    if not dro_features:
+        spinner.fail('Failed to publish DRO feature service. Initialization aborted.')
+        return
+
+    # create situational awareness map
+    spinner.text = 'Creating situational awareness map'
+    sit_template_item = gis.content.get(sit_template_id)
+    sit_map_item = sit_template_item.copy(title=dro_id + ' Situational Awareness Map')
+    if not sit_map_item:
+        spinner.fail('Failed to copy situational awareness map. Initialization aborted.')
+        return
+    move_result = sit_map_item.move(dro_folder)
+    if not move_result['success']:
+        spinner.fail('Failed to move situational awareness map to DRO folder. Intialization aborted.')
+        return
+    sit_map = WebMap(sit_map_item)
+    add_result = sit_map.add_layer(dro_features)
+    if not add_result:
+        spinner.fail('Failed to add features to situational awareness map. Initialization aborted.')
+        return
+    update_result = sit_map.update()
+    if not update_result:
+        spinner.fail('Failed to update situational awareness map. Initialization aborted.')
+        return
+
+    # create operations dashboard
+    spinner.text = 'Creating operations dashboard'
+    ops_template_item = gis.content.get(ops_template_id)
+    ops_item = ops_template_item.copy(title=dro_id + ' Operations Dashboard')
+    move_result = ops_item.move(dro_folder)
+    if not move_result['success']:
+        spinner.fail('Failed to move operations dashboard to DRO folder. Intialization aborted.')
+        return
+    ops_template_data = ops_template_item.get_data()
+    ops_table = dro_features.tables[0]
+    ops_table_id = ops_table.properties('id')
+    for widget in ops_template_data['widgets']:
+        dataSource = widget['datasets'][0]['dataSource']
+        dataSource['itemId'] = dro_features.itemid
+        dataSource['name'] = 'operations ({})'.format(dro_features.title)
+        dataSource['layerId'] = ops_table_id
+    update_result = ops_item.update(data=json.dumps(ops_template_data))
+    if not update_result:
+        spinner.fail('Failed to update operations dashboard. Intialization aborted.')
+        return
+
+    # create director's brief
+    dir_template_item = gis.content.get(dir_template_id)
+    dir_item = dir_template_item.copy(title=dro_id + " Director's Brief")
+    move_result = dir_item.move(dro_folder)
+    if not move_result['success']:
+        spinner.fail("Failed to move director's brief to DRO folder. Intialization aborted.")
+        return
+    dir_template_data = dir_template_item.get_data()
+    dir_template_data['values']['title'] = dro_id + " Relief Operation Director's Brief"
+    dir_template_data['values']['story']['entries'][0]['media']['webmap']['id'] = sit_map_item.id
+    dir_template_data['values']['story']['entries'][1]['media']['webpage']['hash'] = '/' + ops_item.id
+    dir_template_data['values']['story']['entries'][1]['media']['webpage']['url'] = 'https://maps.rcview.redcross.org/portal/apps/opsdashboard/index.html#/' + ops_item.id
+    update_result = dir_item.update(
+        item_properties={'url': 'https://maps.rcview.redcross.org/portal/apps/MapSeries/index.html?appid=' + dir_item.id},
+        data=json.dumps(dir_template_data)
+    )
+    if not update_result:
+        spinner.fail("Failed to update director's brief. Intialization aborted.")
+        return
+
+    spinner.succeed('Finished initializing DRO.')
