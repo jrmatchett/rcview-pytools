@@ -3,9 +3,11 @@
 from arcgis import env as _env
 from arcgis.features import Feature as _Feature,\
                             FeatureSet as _FeatureSet,\
-                            FeatureLayer as _FeatureLayer
+                            FeatureLayer as _FeatureLayer,\
+                            SpatialDataFrame as _SpatialDataFrame
 from arcgis.mapping import WebMap
 from shapely.ops import unary_union as _unary_union
+from shapely.geometry import box as _ShapelyBox
 import re
 import json
 from .geometry import *
@@ -303,3 +305,63 @@ def initialize_dro(
         return
 
     spinner.succeed('Finished initializing DRO.')
+
+
+def _cell_polygon(x_cell, y_cell, cell_size, x_min, y_min, spatial_ref):
+    x_org = x_min - cell_size / 2
+    y_org = y_min - cell_size / 2
+    box = _ShapelyBox(
+        minx=x_cell * cell_size + x_org,
+        miny=y_cell * cell_size + y_org,
+        maxx=x_cell * cell_size + x_org + cell_size,
+        maxy=y_cell * cell_size + y_org + cell_size
+    )
+    return box.as_arcgis(spatial_ref)
+
+
+def grid_dda(dda, dda_grid_layer, grid_size=250, verbose=True):
+    """Grid-based summary of detailed damage assessments.
+
+    Totals number of DDA points, by damage classification, within a fishnet
+    grid.
+    Arguments:
+    dda             DDA Collect FeatureSet.
+    dda_grid_layer  DDA summary grid polygon feature layer. The layer should
+                    contain integer fields named x_cell, y_cell,
+                    major_destroyed, destroyed, major, minor, affected, nvd,
+                    inaccessible, and all.
+    grid_size       Grid cell width. Default is 250 meters, assuming the
+                    DDA FeatureSet has a spatial reference system in meters.
+    verbose         Prints progress indicator.
+
+    Returns:  A dictionary with the following:
+              'grid' -- SpatialDataFrame of the DDA summary grid
+              'deletes' -- dictionary of delete results to the grid layer
+              'adds' -- dictionary of add results to the grid layer
+    """
+    if verbose:
+        spinner = _RCSpinner('Creating grid summary')
+        spinner.start()
+    # count DDAs within grid
+    dda_sdf = _SpatialDataFrame(dda.sdf)
+    dda_extent = dda_sdf.geoextent
+    dda_sdf['x_cell'] = dda_sdf.SHAPE.apply(lambda s: int((s.x - dda_extent[0]) / grid_size + 0.5))
+    dda_sdf['y_cell'] = dda_sdf.SHAPE.apply(lambda s: int((s.y - dda_extent[1]) / grid_size + 0.5))
+    dda_grid = dda_sdf.pivot_table(values='objectid', index=['x_cell', 'y_cell'],
+                                   columns='classification', aggfunc='count', fill_value=0).reset_index()
+    dda_grid.columns = [x.lower() for x in dda_grid.columns]
+    dda_grid['major_destroyed'] = dda_grid.major + dda_grid.destroyed
+    dda_grid['all_dda'] = dda_grid.major_destroyed + dda_grid.minor + dda_grid.affected + dda_grid.nvd
+    dda_grid['shape__area'] = grid_size * grid_size
+    dda_grid['shape__length'] = grid_size * 4
+    # create and add DDA grid features
+    dda_grid['SHAPE'] = dda_grid.apply(lambda x: _cell_polygon(x.x_cell, x.y_cell, grid_size,
+                                       dda_extent[0], dda_extent[1], dda.spatial_reference), axis=1)
+    dda_grid_sdf = _SpatialDataFrame(dda_grid)
+    if verbose:
+        spinner.text = 'Updating grid layer'
+    results_delete = dda_grid_layer.delete_features(where='1=1')
+    results_add = dda_grid_layer.edit_features(adds=dda_grid_sdf.to_featureset())
+    if verbose:
+        spinner.succeed('Grid summary complete')
+    return {'grid': dda_grid, 'deletes': results_delete, 'adds': results_add}
