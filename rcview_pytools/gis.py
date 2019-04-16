@@ -66,7 +66,7 @@ class RCViewGIS(_GIS):
         self._url = 'https://maps.rcview.redcross.org/portal'
         self._username = email
         if password == 'use_keyring':
-            self._password = 'none' if tokens_file else \
+            self._password = 'none' if tokens_file or tokens_dict else \
                              _keyring.get_password(keyring_name, email)
         else:
             self._password = password
