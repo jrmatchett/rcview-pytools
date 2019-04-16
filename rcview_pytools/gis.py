@@ -23,7 +23,7 @@ class RCViewGIS(_GIS):
     """An arcgis GIS object connected to the RC View Portal."""
     def __init__(self, email, password='use_keyring', keyring_name='RCView',
                  client_id='5Mp8pYtrnog7vMWb', tokens_file=None,
-                 tokens_dict=None, verbose=True):
+                 tokens=None, verbose=True):
         """Construct an arcgis GIS object for the RC View Portal.
 
         The selenium python package and the ChromeDriver application must be
@@ -47,7 +47,7 @@ class RCViewGIS(_GIS):
                       previous login (created using the save_tokens method).
                       Reusing previous tokens skips the full authentication
                       process.
-        tokens_dict   (optional) A dictionary containing access tokens, having
+        tokens        (optional) A dictionary containing access tokens, having
                       keys RCVIEW_TOKEN and RCVIEW_REFRESH with values for
                       the token and refresh token, respectively.
         verbose       Prints login status messages.
@@ -66,7 +66,7 @@ class RCViewGIS(_GIS):
         self._url = 'https://maps.rcview.redcross.org/portal'
         self._username = email
         if password == 'use_keyring':
-            self._password = 'none' if tokens_file or tokens_dict else \
+            self._password = 'none' if tokens_file or tokens else \
                              _keyring.get_password(keyring_name, email)
         else:
             self._password = password
@@ -91,11 +91,11 @@ class RCViewGIS(_GIS):
                     }
             except:
                 print('Error using provided tokens, trying user/password authentication.', flush=True)
-        elif tokens_dict:
+        elif tokens:
             try:
                 existing_tokens = {
-                    'token': tokens_dict['RCVIEW_TOKEN'],
-                    'refresh_token': tokens_dict['RCVIEW_REFRESH']
+                    'token': tokens['RCVIEW_TOKEN'],
+                    'refresh_token': tokens['RCVIEW_REFRESH']
                 }
             except:
                 print('Error using provided tokens, trying user/password authentication.', flush=True)
