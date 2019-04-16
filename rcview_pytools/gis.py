@@ -22,7 +22,8 @@ _print_messages = True
 class RCViewGIS(_GIS):
     """An arcgis GIS object connected to the RC View Portal."""
     def __init__(self, email, password='use_keyring', keyring_name='RCView',
-                 client_id='5Mp8pYtrnog7vMWb', tokens_file=None, verbose=True):
+                 client_id='5Mp8pYtrnog7vMWb', tokens_file=None,
+                 tokens_dict=None, verbose=True):
         """Construct an arcgis GIS object for the RC View Portal.
 
         The selenium python package and the ChromeDriver application must be
@@ -46,6 +47,9 @@ class RCViewGIS(_GIS):
                       previous login (created using the save_tokens method).
                       Reusing previous tokens skips the full authentication
                       process.
+        tokens_dict   (optional) A dictionary containing access tokens, having
+                      keys RCVIEW_TOKEN and RCVIEW_REFRESH with values for
+                      the token and refresh token, respectively.
         verbose       Prints login status messages.
         """
         global _print_messages
@@ -86,7 +90,15 @@ class RCViewGIS(_GIS):
                         'refresh_token': lines[1].strip()
                     }
             except:
-                pass
+                print('Error using provided tokens, trying user/password authentication.', flush=True)
+        elif tokens_dict:
+            try:
+                existing_tokens = {
+                    'token': tokens_dict['RCVIEW_TOKEN'],
+                    'refresh_token': tokens_dict['RCVIEW_REFRESH']
+                }
+            except:
+                print('Error using provided tokens, trying user/password authentication.', flush=True)
 
         self._portal = _RCViewPortal(
             url=self._url, username=self._username,
