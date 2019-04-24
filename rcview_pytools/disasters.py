@@ -3,8 +3,7 @@
 from arcgis import env as _env
 from arcgis.features import Feature as _Feature,\
                             FeatureSet as _FeatureSet,\
-                            FeatureLayer as _FeatureLayer,\
-                            SpatialDataFrame as _SpatialDataFrame
+                            FeatureLayer as _FeatureLayer
 from arcgis.mapping import WebMap
 from shapely.ops import unary_union as _unary_union
 from shapely.geometry import box as _ShapelyBox
@@ -108,7 +107,7 @@ def define_districts(type, districts_list, state=None, districts_layer=None):
         units_features = units_layer.query(query_string)
 
         # warn user if any units not found
-        unique_units = list(units_features.df[unit_attribute].unique())
+        unique_units = list(units_features.sdf[unit_attribute].unique())
         unique_units.sort()
         if len(unique_units) != len(units):
             warn_message = '{} not found'.format(
@@ -116,9 +115,9 @@ def define_districts(type, districts_list, state=None, districts_layer=None):
             _warnings.warn(warn_message)
 
         # create district feature
-        district_polygon = _unary_union([p.as_shapely2() for p in units_features.df.SHAPE])
-        district_feature = _Feature(
-            geometry=district_polygon.as_arcgis(units_features.spatial_reference),
+        district_polygon = _unary_union([p.as_shapely2() for p in units_features.sdf.SHAPE])
+        district_feature = dict(
+            geometry=dict(district_polygon.as_arcgis(units_features.spatial_reference)),
             attributes={
                 'number': district + 1,
                 'name': 'District {}'.format(district + 1),
@@ -145,8 +144,7 @@ def define_districts(type, districts_list, state=None, districts_layer=None):
             # create layer
             try:
                 districts_item = _FeatureSet(district_features)\
-                                 .df.drop('OBJECTID', axis=1)\
-                                 .to_featurelayer(
+                                 .sdf.spatial.to_featurelayer(
                                      title=districts_layer,
                                      tags='districts'
                                  )
@@ -156,7 +154,7 @@ def define_districts(type, districts_list, state=None, districts_layer=None):
 
                 # update description
                 districts_fset = item_layer.query()
-                r = districts_item.update(_districts_description(districts_fset.df, type))
+                r = districts_item.update(_districts_description(districts_fset.sdf, type))
                 spinner.succeed('Created ' + districts_layer + ' layer')
             except Exception as e:
                 districts_fset = _FeatureSet(district_features)
@@ -175,7 +173,7 @@ def define_districts(type, districts_list, state=None, districts_layer=None):
                 districts_fset = districts_layer.query()
                 districts_item = _env.active_gis.content.get(
                     districts_layer.properties.serviceItemId)
-                r = districts_item.update(_districts_description(districts_fset.df, type))
+                r = districts_item.update(_districts_description(districts_fset.sdf, type))
                 spinner.succeed('Updated districts layer')
             else:
                 districts_fset = _FeatureSet(district_features)
@@ -335,7 +333,7 @@ def grid_dda(dda, dda_grid_layer, grid_size=250, verbose=True):
     verbose         Prints progress indicator.
 
     Returns:  A dictionary with the following:
-              'grid' -- SpatialDataFrame of the DDA summary grid
+              'grid' -- data frame of the DDA summary grid
               'deletes' -- dictionary of delete results to the grid layer
               'adds' -- dictionary of add results to the grid layer
     """
@@ -343,8 +341,8 @@ def grid_dda(dda, dda_grid_layer, grid_size=250, verbose=True):
         spinner = _RCSpinner('Creating grid summary')
         spinner.start()
     # count DDAs within grid
-    dda_sdf = _SpatialDataFrame(dda.sdf)
-    dda_extent = dda_sdf.geoextent
+    dda_sdf = dda.sdf
+    dda_extent = dda_sdf.spatial.full_extent
     dda_sdf['x_cell'] = dda_sdf.SHAPE.apply(lambda s: int((s.x - dda_extent[0]) / grid_size + 0.5))
     dda_sdf['y_cell'] = dda_sdf.SHAPE.apply(lambda s: int((s.y - dda_extent[1]) / grid_size + 0.5))
     dda_grid = dda_sdf.pivot_table(values='objectid', index=['x_cell', 'y_cell'],
@@ -357,11 +355,10 @@ def grid_dda(dda, dda_grid_layer, grid_size=250, verbose=True):
     # create and add DDA grid features
     dda_grid['SHAPE'] = dda_grid.apply(lambda x: _cell_polygon(x.x_cell, x.y_cell, grid_size,
                                        dda_extent[0], dda_extent[1], dda.spatial_reference), axis=1)
-    dda_grid_sdf = _SpatialDataFrame(dda_grid)
     if verbose:
         spinner.text = 'Updating grid layer'
     results_delete = dda_grid_layer.delete_features(where='1=1')
-    results_add = dda_grid_layer.edit_features(adds=dda_grid_sdf.to_featureset())
+    results_add = dda_grid_layer.edit_features(adds=dda_grid.spatial.to_featureset())
     if verbose:
         spinner.succeed('Grid summary complete')
     return {'grid': dda_grid, 'deletes': results_delete, 'adds': results_add}

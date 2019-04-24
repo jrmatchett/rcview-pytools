@@ -10,8 +10,6 @@ This package contains tools for working with the American Red Cross's RC View Ma
 
 * Install the ArcGIS API for Python following these [instructions](https://developers.arcgis.com/python/guide/install-and-set-up).
 
-* Install the `selenium`, `shapely`, `mgrs`, `tqdm`, and `halo` packages using your preferred package manager ([pip](https://pypi.org/project/pip/) or [conda](https://conda.io/docs/)).
-
 * Install `rcview_pytools` by downloading the source code and running `python setup.py install` from the package's root directory.
 
 ## Getting Started
@@ -29,8 +27,10 @@ For additional guidance on interacting with an ArcGIS portal, see the [ArcGIS Py
 
 * `gis` provides the `RCViewGIS` class, which is a subclass of the `arcgis` `GIS` class connected specifically to the RC View mapping portal.
 
-* `geometry` extends `arcgis` and `shapely` polygon classes. As of version 1.4, the `arcgis` package does not properly handle polygons with interior holes unless Esri's proprietary `arcpy` package is available. This module provides an `as_shapely2` method for the `arcgis` `Polygon` class, correctly handling interior holes. It also adds an `as_arcgis` method for `shapely` `Polygon` and `MultiPolygon` classes, so those objects can be converted back to `arcgis` polygons.
+* `geometry` extends `arcgis` and `shapely` polygon classes. As of version 1.6, the `arcgis` package does not properly handle polygons with interior holes unless Esri's proprietary `arcpy` package is available. This module provides an `as_shapely2` method for the `arcgis` `Polygon` class, correctly handling interior holes. It also adds an `as_arcgis` method for `shapely` `Polygon` and `MultiPolygon` classes, so those objects can be converted back to `arcgis` polygons.
 
 * `demographics` contains functions for summarizing demographic information, such as determining the population and housing units within areas impacted by a disaster.
+
+* `disasters` contains functions for creating DRO districts, initializing DRO maps, and creating gridded summaries of detailed damage assessments.
 
 * `extras` contains a variety of functions for working with spatial data, such as generating Google Maps URLs and US National Grid coordinates for points.

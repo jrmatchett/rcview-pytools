@@ -40,7 +40,7 @@ def _population_housing_enrich(areas_layer, areas_query, areas_sr, enrich_id):
     enrich_fc = _enrich_layer(enrich_layer, country='US',
                               analysis_variables=['TOTPOP_CY', 'TOTHH_CY'],
                               gis=gis)
-    enrich_df = enrich_fc.query().df.merge(areas.df, left_on='origin_obj', right_on=objectid)
+    enrich_df = enrich_fc.query().sdf.merge(areas.sdf, left_on='origin_obj', right_on=objectid)
 
     # update area features
     spinner.text = 'Updating areas'
@@ -135,7 +135,7 @@ def population_housing(areas_layer, areas_query='population is null',
     processing_issues = False
     spinner.stop_and_persist()
     #print('  Summarizing population and housing', flush=True)
-    for i, area in _tqdm(areas.df.iterrows(), total=len(areas)):
+    for i, area in _tqdm(areas.sdf.iterrows(), total=len(areas)):
         processing_errors = []
         processing_warnings = []
         # query census blocks intersecting area
@@ -164,7 +164,7 @@ def population_housing(areas_layer, areas_query='population is null',
         hu_gt50 = 0
         hu_wtd = 0
 
-        for j, block in census_blocks.df.iterrows():
+        for j, block in census_blocks.sdf.iterrows():
             block_poly = block.SHAPE.as_shapely2()
             if not block_poly.is_valid:
                 processing_warnings.append(

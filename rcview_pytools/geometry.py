@@ -15,8 +15,9 @@ from shapely.geometry import Polygon as ShapelyPolygon
 from shapely.geometry import MultiPolygon as ShapelyMultiPolygon
 from shapely.geometry.polygon import LinearRing as _ShapelyLinearRing
 from shapely.validation import explain_validity as _explain_validity
-from arcgis.features import SpatialDataFrame
+from arcgis.features import GeoAccessor, GeoSeriesAccessor
 from geopandas import GeoDataFrame
+from pandas import DataFrame as _DataFrame
 import warnings as _warnings
 from .constants import HAS_ARCPY
 import re as _re
@@ -140,7 +141,7 @@ ShapelyMultiPolygon.as_arcgis = _as_arcgis
 
 
 def _to_SpatialDataFrame(self, spatial_reference=None):
-    """Return an arcgis SpatialDataFrame.
+    """Return an arcgis spatially-enabled data frame.
 
     Arguments:
     spatial_reference  Either None (the default), a spatial reference integer
@@ -164,10 +165,8 @@ def _to_SpatialDataFrame(self, spatial_reference=None):
         _warnings.simplefilter('always', UserWarning)
         _warnings.warn('Unable to extract a spatial reference, assuming latitude/longitude (wkid 4326).')
 
-    sdf = SpatialDataFrame(
-        data=self.drop('geom', axis=1),
-        geometry=[p.as_arcgis(spatial_reference) for p in self.geom]
-    )
+    sdf = _DataFrame(data=self.drop('geometry', axis=1))
+    sdf['SHAPE'] = self.geometry.apply(_as_arcgis, spatial_reference=spatial_reference)
 
     return sdf
 
