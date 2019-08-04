@@ -2,11 +2,14 @@
 
 import os as _os
 import urllib as _urllib
+import string
 import mgrs as _mgrs
 import numpy as _numpy
 from .constants import OS_WINDOWS, IN_IPYTHON
 from halo import Halo as _Halo
 from arcgis.gis import Item
+from arcgis.geocoding import geocode
+from arcgis.geometry import Point
 
 
 def round_significant(x, p=2):
@@ -315,3 +318,67 @@ def _patched_copy_feature_layer_collection(self, service_name, layers=None,
     return None
 
 Item.copy_feature_layer_collection = _patched_copy_feature_layer_collection
+
+
+def _standardize_unit(x):
+    # convert to upper and replace punctuation
+    x = str(x).upper().translate(str.maketrans('', '', string.punctuation))
+    # replace various unit types
+    unit_descriptors = ['APARTMENT', 'APT', 'SPACE', 'SPC', 'SP', 'LOT', 'UNIT', 'NUMBER', 'NUM', 'NO']
+    for u in unit_descriptors:
+        if u in x:
+            x = x.replace(u, '')
+    # replace any remaining spaces
+    return x.replace(' ', '')
+
+
+class StandardizedAddress():
+    """A standardized address."""
+    def __init__(self, street_number, street_name, city, state, zip, unit=None):
+        """Creates a standarized address through geocoding.
+
+        Arguments:
+        street_number  Street number.
+        street_name    Street name, including direction prefix and type suffix.
+        city           City.
+        state          2-letter state abbreviation.
+        zip            Zip code.
+        unit           Unit number for apartments, trailer park spaces, etc.
+        """
+        search_address = '{} {}, {}, {}{}'.format(
+            str(street_number).strip(),
+            street_name.strip(),
+            city.strip(),
+            state.strip(),
+            ' ' + str(zip).strip() if zip else ''
+        )
+        gc = geocode(search_address, max_locations=1, out_sr={'wkid': 4326})
+        atts = gc[0]['attributes']
+        self.search = search_address
+        self.type = atts['Addr_type']
+        self.number = atts['AddNum']
+        self.street = ' '.join([atts['StPreDir'], atts['StName'], atts['StType']]).strip()
+        self.unit = _standardize_unit(unit) if unit else None
+        self.city = atts['City']
+        self.state = atts['RegionAbbr']
+        self.zip = atts['Postal']
+        self.county = atts['Subregion']
+        self.latitude = round(atts['Y'], 6)
+        self.longitude = round(atts['X'], 6)
+    @property
+    def address(self):
+        """Returns a string containing the address components."""
+        address = '{} {}{}, {}, {} {}, {}'.format(
+            '?' if self.number == '' else self.number,
+            '?' if self.street == '' else self.street,
+            f', Unit {self.unit}' if self.unit else '',
+            self.city,
+            self.state,
+            self.zip,
+            self.county
+        )
+        return address
+    @property
+    def point(self):
+        """Returns an arcgis point geometry of the geocoded address location."""
+        return Point({'x': self.longitude, 'y': self.latitude, 'spatialReference': {'wkid': 4326}})

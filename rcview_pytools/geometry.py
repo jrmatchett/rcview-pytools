@@ -167,6 +167,7 @@ def _to_SpatialDataFrame(self, spatial_reference=None):
 
     sdf = _DataFrame(data=self.drop('geometry', axis=1))
     sdf['SHAPE'] = self.geometry.apply(_as_arcgis, spatial_reference=spatial_reference)
+    sdf.spatial.set_geometry('SHAPE')
 
     return sdf
 
