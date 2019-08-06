@@ -324,7 +324,7 @@ def _standardize_unit(x):
     # convert to upper and replace punctuation
     x = str(x).upper().translate(str.maketrans('', '', string.punctuation))
     # replace various unit types
-    unit_descriptors = ['APARTMENT', 'APT', 'SPACE', 'SPC', 'SP', 'LOT', 'UNIT', 'NUMBER', 'NUM', 'NO']
+    unit_descriptors = ['APARTMENT', 'APT', 'SPACE', 'SPC', 'SP', 'LOT', 'UNIT', 'NUMBER', 'NUM', 'NO', 'ROOM']
     for u in unit_descriptors:
         if u in x:
             x = x.replace(u, '')
