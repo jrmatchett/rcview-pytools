@@ -10,6 +10,7 @@ from halo import Halo as _Halo
 from arcgis.gis import Item
 from arcgis.geocoding import geocode
 from arcgis.geometry import Point
+from arcgis.gis import User
 
 
 def round_significant(x, p=2):
@@ -333,28 +334,31 @@ def _standardize_unit(x):
 
 
 class StandardizedAddress():
-    """A standardized address."""
-    def __init__(self, street_number, street_name, city, state, zip, unit=None):
+    """A standardized address.
+
+    Attributes:
+    search     Address used for geocode search.
+    type       Geocode result type.
+    number     Street number.
+    unit       Apartment, mobile home, or other unit identifier.
+    street     Street, including any direction prefix and type suffix.
+    city       City.
+    state      Two-letter state abbreviation.
+    zip        Zip code.
+    county     County or parish.
+    latitude   Point latitude.
+    longitude  Point longitude.
+    """
+    def __init__(self, address, unit=None):
         """Creates a standarized address through geocoding.
 
         Arguments:
-        street_number  Street number.
-        street_name    Street name, including direction prefix and type suffix.
-        city           City.
-        state          2-letter state abbreviation.
-        zip            Zip code.
-        unit           Unit number for apartments, trailer park spaces, etc.
+        address  Address (do not include any sub-unit identifier, such as apartment number).
+        unit     Unit identifier for apartments, trailer park spaces, etc.
         """
-        search_address = '{} {}, {}, {}{}'.format(
-            str(street_number).strip(),
-            street_name.strip(),
-            city.strip(),
-            state.strip(),
-            ' ' + str(zip).strip() if zip else ''
-        )
-        gc = geocode(search_address, max_locations=1, out_sr={'wkid': 4326})
+        gc = geocode(address, max_locations=1, out_sr={'wkid': 4326})
         atts = gc[0]['attributes']
-        self.search = search_address
+        self.search = address
         self.type = atts['Addr_type']
         self.number = atts['AddNum']
         self.street = ' '.join([atts['StPreDir'], atts['StName'], atts['StType']]).strip()

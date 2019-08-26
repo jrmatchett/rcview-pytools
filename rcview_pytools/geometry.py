@@ -156,7 +156,7 @@ def _to_SpatialDataFrame(self, spatial_reference=None):
             if isinstance(crs, dict):
                 crs = crs['init']
             if 'epsg' in crs:
-                m = _re.search('epsg:(\d+)', crs)
+                m = _re.search(r'epsg:(\d+)', crs)
                 if m:
                     spatial_reference = int(m.groups()[0])
 
