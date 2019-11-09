@@ -48,15 +48,12 @@ def _population_housing_enrich(areas_layer, areas_query, areas_sr, enrich_id):
     areas_summary = {}
 
     for i, f in enrich_df.iterrows():
-        area_sq_mi = f.SHAPE_y.area / 4046.86 / 640
-
         areas_updates.append(
             {'attributes': {
                     objectid: f.origin_obj,
                     'population': _round_significant(f.TOTPOP_CY),
                     'housing': _round_significant(f.TOTHH_CY),
-                    'method': 'Esri enrichment',
-                    'area_sq_mi': area_sq_mi
+                    'method': 'Esri enrichment'
                 }
             }
         )
@@ -77,7 +74,7 @@ def _population_housing_enrich(areas_layer, areas_query, areas_sr, enrich_id):
 
 
 def population_housing(areas_layer, areas_query='population is null',
-                       areas_sr=102039, method='gt50', enrich_id=None):
+                       method='gt50', enrich_id=None):
     """Calculates and updates population and housing units within areas.
 
     Returns a list of population ('pop') and housing unit ('hu') counts
@@ -87,14 +84,9 @@ def population_housing(areas_layer, areas_query='population is null',
 
     Arguments:
     areas_layer  A polygon FeatureLayer. The layer must contain attributes named
-                 'population' (integer), 'housing' (integer),
-                 'area_sq_mi' (double), and 'method' (string). It also must be
-                 editable by the GIS user.
+                 'population' (integer), 'housing' (integer), and
+                 'method' (string). It also must be editable by the GIS user.
     areas_query  Selection query to filter features for analysis.
-    areas_sr     Spatial reference for analysis. Default is USA Contiguous
-                 Albers Equal Area Conic (USGS), which is appropriate for the
-                 continental US. If another spatial reference is specified, its
-                 measurement units must be in meters.
     method       Method used for feature layer population and housing unit
                  counts ('all', 'gt50', 'wtd', 'enrich').
     enrich_id    If using the 'enrich' method, the item ID of a RC View hosted
@@ -117,6 +109,7 @@ def population_housing(areas_layer, areas_query='population is null',
     while the 'enrich' method uses the most recent population and housing unit
     projections developed by Esri.
     """
+    areas_sr = 3857
     if method == 'enrich':
         return _population_housing_enrich(areas_layer, areas_query, areas_sr,
                                           enrich_id)
@@ -151,9 +144,6 @@ def population_housing(areas_layer, areas_query='population is null',
         census_blocks = census_layer.query(
             out_fields='OBJECTID,POP100,HU100,GEOID',
             geometry_filter=area_filter, out_sr=areas_sr)
-
-        # calculate area square miles
-        area_sq_mi = area_poly.area / 4046.86 / 640
 
         # summarize population and housing units
         pop_all = 0
@@ -202,8 +192,7 @@ def population_housing(areas_layer, areas_query='population is null',
             'pop_wtd': pop_wtd,
             'hu_all': hu_all,
             'hu_gt50': hu_gt50,
-            'hu_wtd': hu_wtd,
-            'area_sq_mi': area_sq_mi
+            'hu_wtd': hu_wtd
         }
 
         if processing_errors:
