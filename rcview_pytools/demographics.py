@@ -20,7 +20,7 @@ def _population_housing_enrich(areas_layer, areas_query, areas_sr, enrich_id):
     objectid = areas_layer.properties.objectIdField
     areas = areas_layer.query(
         where=areas_query,
-        out_fields=objectid + ',population,housing,area_sq_mi,method',
+        out_fields=objectid + ',population,housing,method',
         out_sr=areas_sr)
 
     # add areas to enrichment layer
@@ -59,7 +59,6 @@ def _population_housing_enrich(areas_layer, areas_query, areas_sr, enrich_id):
         )
 
         areas_summary[f.origin_obj] = {
-            'area_sq_mi': area_sq_mi,
             'hu_enrich': f.TOTHH_CY,
             'pop_enrich': f.TOTPOP_CY,
         }
@@ -119,7 +118,7 @@ def population_housing(areas_layer, areas_query='population is null',
     objectid = areas_layer.properties.objectIdField
     areas = areas_layer.query(
         where=areas_query,
-        out_fields=objectid + ',population,housing,area_sq_mi,method',
+        out_fields=objectid + ',population,housing,method',
         out_sr=areas_sr)
 
     spinner.text = 'Summarizing population and housing'
@@ -219,7 +218,6 @@ def population_housing(areas_layer, areas_query='population is null',
             method = None
 
         if method is not None:
-            area.area_sq_mi = area_sq_mi
             area.drop('SHAPE', inplace=True)
             areas_summary[area[objectid]]['update_results'] = \
                 areas_layer.edit_features(
