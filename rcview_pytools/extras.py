@@ -11,6 +11,7 @@ from arcgis.gis import Item
 from arcgis.geocoding import geocode
 from arcgis.geometry import Point
 from arcgis.gis import User
+from arcgis.features import FeatureLayer
 
 
 def round_significant(x, p=2):
@@ -386,3 +387,30 @@ class StandardizedAddress():
     def point(self):
         """Returns an arcgis point geometry of the geocoded address location."""
         return Point({'x': self.longitude, 'y': self.latitude, 'spatialReference': {'wkid': 4326}})
+
+
+def sdf(self, decode_domains=True, use_aliases=False, **kwargs):
+    """Returns a feature layer's data as a spatial dataframe, decoding any domain values by default
+    and optionally using field aliases for the dataframe column names.
+    Arguments:
+    decode_domains  If True, replaces domain codes with their values.
+    use_aliases     If True, uses field aliases for the dataframe column names.
+    **kwargs        Keyword arguments passed to the FeatureLayer query method.
+    """
+    feature_set = self.query(**kwargs)
+    if len(feature_set) == 0:
+        raise RuntimeError('The feature layer query returned zero records.')
+    sdf = feature_set.sdf
+    if decode_domains:
+        fields = self.properties.fields
+        sdf_columns = sdf.columns
+        for f in fields:
+            if ('domain' in f) and (f.domain is not None) and (f.name in sdf_columns):
+                code_values = {k:v for k,v in [(d.code, d.name) for d in f.domain.codedValues]}
+                sdf[f.name].replace(code_values, inplace=True)
+    if use_aliases:
+        field_aliases = {k:v for k,v in [(f['name'], f['alias']) for f in feature_set.fields]}
+        sdf.rename(columns=field_aliases, inplace=True)
+    return sdf
+
+FeatureLayer.sdf = sdf
