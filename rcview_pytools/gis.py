@@ -4,7 +4,11 @@ from arcgis import GIS as _GIS
 from arcgis._impl.portalpy import Portal as _Portal
 from arcgis._impl.connection import _ArcGISConnection, _normalize_url, _parse_hostname
 import arcgis.env as _arcgis_env
+from arcgis.geocoding import Geocoder as _Geocoder
+from arcgis.features import FeatureSet as _FeatureSet
+from arcgis.geometry import Geometry as _Geometry
 from six.moves.urllib_parse import urlencode as _urlencode
+import copy as _copy
 import tempfile as _tempfile
 from selenium import webdriver as _webdriver
 from selenium.webdriver.chrome.options import Options as _Options
@@ -249,3 +253,64 @@ class _RCViewConnection(_ArcGISConnection):
         self._refresh_token = token_info['refresh_token']
         self._token = token_info['access_token']
         return self._token
+
+
+class RCViewGeocoder(_Geocoder):
+    """Subclass of arcgis Geocoder connected to the RC View geocoding service."""
+    def __init__(self, gis):
+        if not isinstance(gis, RCViewGIS):
+            raise TypeError('gis parameter must be an RCViewGIS object.')
+        super().__init__('https://maps.rcview.redcross.org/portal/sharing/servers/da9228b803884dda94df19c2f9d83deb/rest/services/World/GeocodeServer', gis)
+    def batch_geocode(self, addresses, as_featureset=False, **kwargs):
+        """Alternative batch geocoding method which allows specification of additional
+        REST API parameters as keyword arguments. See
+        https://developers.arcgis.com/rest/geocode/api-reference/geocoding-geocode-addresses.htm
+        for details.
+        """
+        url = self.url + "/geocodeAddresses"
+        params = {'f': 'json'}
+        for k, v in kwargs.items():
+            params[k] = v
+
+        addr_recordset = []
+
+        for index in range(len(addresses)):
+            address = addresses[index]
+
+            attributes = {"OBJECTID": index}
+            if isinstance(address, str):
+                attributes[self._address_field] = address
+            elif isinstance(address, dict):
+                attributes.update(address)
+            else:
+                print("Unsupported address: " + str(address))
+                print("address should be a string (single line address) or dictionary "
+                      "(with address fields as keys)")
+
+            addr_rec = {"attributes": attributes}
+            addr_recordset.append(addr_rec)
+
+        params['addresses'] = {"records": addr_recordset}
+
+        resp = self._con.post(url, params, token=self._token)
+        if resp is not None and as_featureset:
+            sr = resp['spatialReference']
+
+            matches = [None] * len(addresses)
+            locations = resp['locations']
+            for location in locations:
+                geom = _copy.copy(location['location'])
+                if 'spatialReference' not in geom:
+                    geom['spatialReference'] = sr
+                att = location['attributes']
+                matches[location['attributes']['ResultID']] = {'geometry': _Geometry(geom),
+                                                               "attributes" : att }
+            return _FeatureSet(features=matches, spatial_reference=sr)
+        elif resp is not None and as_featureset == False:
+            matches = [None] * len(addresses)
+            locations = resp['locations']
+            for location in locations:
+                matches[location['attributes']['ResultID']] = location
+            return matches
+        else:
+            return []
