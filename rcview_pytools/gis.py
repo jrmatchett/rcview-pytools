@@ -198,9 +198,9 @@ class _RCViewConnection(_ArcGISConnection):
         codeurl = "{}?{}".format(url, paramstring)
 
         options = _Options()
-        options.set_headless(True)
+        options.add_argument("--headless")
         options.add_argument('--log-level=3')
-        driver = _webdriver.Chrome(chrome_options=options)
+        driver = _webdriver.Chrome(options=options)
         driver.get(codeurl)
 
         delay = 10
