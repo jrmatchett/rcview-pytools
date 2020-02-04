@@ -8,8 +8,6 @@ This package contains tools for working with the American Red Cross's RC View Ma
 
 * Activate your desired [python virtual environment](https://docs.python.org/3/tutorial/venv.html).
 
-* Install the ArcGIS API for Python following these [instructions](https://developers.arcgis.com/python/guide/install-and-set-up).
-
 * Install `rcview_pytools` by downloading the source code and running `python setup.py install` from the package's root directory.
 
 ## Getting Started
