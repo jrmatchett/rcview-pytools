@@ -29,7 +29,7 @@ setup(
     ],
     packages=find_packages(exclude=['contrib', 'docs', 'tests']),
     install_requires=[
-        'arcgis==1.6.2',
+        'arcgis==1.6.2.post1',
         'pyshp==1.2.12',
         'geopandas',
         'mgrs',
