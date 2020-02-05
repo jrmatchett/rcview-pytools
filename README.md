@@ -10,14 +10,19 @@ This package contains tools for working with the American Red Cross's RC View Ma
 
 * Install `rcview_pytools` by downloading the source code and running `python setup.py install` from the package's root directory.
 
+* Setup an application client in RC View:
+  * Log into RC View, click the `Map Portal` tile, click `Content`, and click `My Content` tab.
+  * Click `Add Item` and choose `An application`.
+  * Select `Application` for the type, set the title to `Python Authentication`, set a tag to `Python`, and click `Add Item`.
+  * Click the `Settings` tab, scroll down to `Application Settings`, and click `Registered Info`.
+  * The `App ID` is the `client_id` value you'll need to use for creating an `RCViewGIS` object.
+
 ## Getting Started
 
 Programmatically interacting with feature layers, maps, and other data hosted on RC View typically begins with creating a `RCViewGIS` object. For example:
 
     from rcview_pytools.gis import RCViewGIS
-    gis = RCViewGIS('your_email', 'your_password')
-
-You must have access permission to the RC View system, which is granted to Red Cross staff and volunteers in Disaster Cycle Services positions. The login email and password are the same as your Red Cross single-sign-on credentials.
+    gis = RCViewGIS('your_email', 'your_password', 'your_client_id')
 
 For additional guidance on interacting with an ArcGIS portal, see the [ArcGIS Python API Developer's Guide](https://developers.arcgis.com/python/guide).
 

@@ -24,8 +24,8 @@ _print_messages = True
 
 class RCViewGIS(_GIS):
     """An arcgis GIS object connected to the RC View Portal."""
-    def __init__(self, email, password='use_keyring', keyring_name='RCView',
-                 client_id='5Mp8pYtrnog7vMWb', tokens_file=None,
+    def __init__(self, email, password='use_keyring', client_id=None,
+                 keyring_name='RCView', tokens_file=None,
                  tokens=None, verbose=True):
         """Construct an arcgis GIS object for the RC View Portal.
 
