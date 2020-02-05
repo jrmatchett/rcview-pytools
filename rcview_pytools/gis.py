@@ -1,28 +1,28 @@
 """Classes for creating a GIS object connected to the RC View Portal."""
 
-from arcgis import GIS as _GIS
-from arcgis._impl.portalpy import Portal as _Portal
+from arcgis import GIS
+from arcgis._impl.portalpy import Portal
 from arcgis._impl.connection import _ArcGISConnection, _normalize_url, _parse_hostname
-import arcgis.env as _arcgis_env
-from arcgis.geocoding import Geocoder as _Geocoder
-from arcgis.features import FeatureSet as _FeatureSet
-from arcgis.geometry import Geometry as _Geometry
-from six.moves.urllib_parse import urlencode as _urlencode
-import copy as _copy
-import tempfile as _tempfile
-from selenium import webdriver as _webdriver
-from selenium.webdriver.chrome.options import Options as _Options
-from selenium.webdriver.support.ui import WebDriverWait as _WebDriverWait
-from selenium.webdriver.support import expected_conditions as _EC
-from selenium.webdriver.common.by import By as _By
-from selenium.common.exceptions import TimeoutException as _TimeoutException
-import keyring as _keyring
-from .extras import RCActivityIndicator as _RCSpinner
+import arcgis.env
+from arcgis.geocoding import Geocoder
+from arcgis.features import FeatureSet
+from arcgis.geometry import Geometry
+from six.moves.urllib_parse import urlencode
+import copy
+import tempfile
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import TimeoutException
+import keyring
+from .extras import RCActivityIndicator as RCSpinner
 
-_print_messages = True
+print_messages = True
 
 
-class RCViewGIS(_GIS):
+class RCViewGIS(GIS):
     """An arcgis GIS object connected to the RC View Portal."""
     def __init__(self, email, password='use_keyring', client_id=None,
                  keyring_name='RCView', tokens_file=None,
@@ -55,11 +55,11 @@ class RCViewGIS(_GIS):
                       values for the client id, token, and refresh token.
         verbose       Prints login status messages.
         """
-        global _print_messages
-        _print_messages = verbose
+        global print_messages
+        print_messages = verbose
 
-        if _print_messages:
-            self._spinner = _RCSpinner('Logging into RC View')
+        if print_messages:
+            self._spinner = RCSpinner('Logging into RC View')
             self._spinner.start()
         else:
             self._spinner=None
@@ -70,7 +70,7 @@ class RCViewGIS(_GIS):
         self._username = email
         if password == 'use_keyring':
             self._password = 'none' if tokens_file or tokens else \
-                             _keyring.get_password(keyring_name, email)
+                             keyring.get_password(keyring_name, email)
         else:
             self._password = password
         if not self._password:
@@ -112,9 +112,9 @@ class RCViewGIS(_GIS):
         self._con = self._portal.con
         self._tools = _Tools(self)
 
-        _arcgis_env.active_gis = self
+        arcgis.env.active_gis = self
 
-        if _print_messages:
+        if print_messages:
             self._spinner.succeed('Login successful')
 
 
@@ -129,12 +129,12 @@ class RCViewGIS(_GIS):
                                       self._con._refresh_token))
 
 
-class _RCViewPortal(_Portal):
+class _RCViewPortal(Portal):
     # A Portal object for RC View.
     def __init__(self, url, username, password, client_id, key_file=None,
                  cert_file=None, expiration=60, referer=None, proxy_host=None,
                  proxy_port=None, connection=None,
-                 workdir=_tempfile.gettempdir(), tokenurl=None,
+                 workdir=tempfile.gettempdir(), tokenurl=None,
                  verify_cert=True, spinner=None, existing_tokens=None):
 
         self.hostname = _parse_hostname(url)
@@ -151,7 +151,7 @@ class _RCViewPortal(_Portal):
         self._is_pre_21 = False
         self._spinner = spinner
 
-        if _print_messages:
+        if print_messages:
             self._spinner.text = 'Connecting to portal'
 
         self.con = _RCViewConnection(baseurl=self.resturl,
@@ -179,7 +179,7 @@ class _RCViewConnection(_ArcGISConnection):
         super().__init__(*args, **kwargs)
     def oauth_authenticate(self, client_id, expiration):
         # Authenticate with RC View single-sign-on.
-        if _print_messages:
+        if print_messages:
             self._spinner.text = 'Authenticating user'
 
         if self._existing_tokens:
@@ -195,36 +195,36 @@ class _RCViewConnection(_ArcGISConnection):
         }
 
         url = self.baseurl + 'oauth2/authorize'
-        paramstring = _urlencode(parameters)
+        paramstring = urlencode(parameters)
         codeurl = "{}?{}".format(url, paramstring)
 
-        options = _Options()
-        options.add_argument("--headless")
+        options = Options()
+        options.add_argument('--headless')
         options.add_argument('--log-level=3')
-        driver = _webdriver.Chrome(options=options)
+        driver = webdriver.Chrome(options=options)
         driver.get(codeurl)
 
         delay = 10
         try:
-            using_redcross_element = _WebDriverWait(driver, delay).\
-                until(_EC.presence_of_element_located((_By.ID, 'idp_Name')))
-        except _TimeoutException:
+            using_redcross_element = WebDriverWait(driver, delay).\
+                until(EC.presence_of_element_located((By.ID, 'idp_Name')))
+        except TimeoutException:
             driver.quit()
-            if _print_messages:
+            if print_messages:
                 self._spinner.fail('Accessing Red Cross single-sign-on took too much time.')
 
         using_redcross_element.click()
 
         try:
-            username_element = _WebDriverWait(driver, delay).\
-                until(_EC.presence_of_element_located((_By.XPATH, '/html/body/main/div[4]/div/div/div/div/div/div/div/div[1]/div/div/div/div[4]/input')))
-            password_element = _WebDriverWait(driver, delay).\
-                until(_EC.presence_of_element_located((_By.XPATH, '/html/body/main/div[4]/div/div/div/div/div/div/div/div[1]/div/div/div/div[5]/input')))
-            signin_element = _WebDriverWait(driver, delay).\
-                until(_EC.presence_of_element_located((_By.XPATH, '/html/body/main/div[4]/div/div/div/div/div/div/div/div[1]/div/div/div/div[6]/button')))
-        except _TimeoutException:
+            username_element = WebDriverWait(driver, delay).\
+                until(EC.presence_of_element_located((By.XPATH, '/html/body/main/div[4]/div/div/div/div/div/div/div/div[1]/div/div/div/div[4]/input')))
+            password_element = WebDriverWait(driver, delay).\
+                until(EC.presence_of_element_located((By.XPATH, '/html/body/main/div[4]/div/div/div/div/div/div/div/div[1]/div/div/div/div[5]/input')))
+            signin_element = WebDriverWait(driver, delay).\
+                until(EC.presence_of_element_located((By.XPATH, '/html/body/main/div[4]/div/div/div/div/div/div/div/div[1]/div/div/div/div[6]/button')))
+        except TimeoutException:
             driver.quit()
-            if _print_messages:
+            if print_messages:
                 self._spinner.fail('Accessing Red Cross single-sign-on took too much time.')
 
         username_element.send_keys(self._username)
@@ -232,11 +232,11 @@ class _RCViewConnection(_ArcGISConnection):
         signin_element.click()
 
         try:
-            code_element = _WebDriverWait(driver, delay).\
-                until(_EC.presence_of_element_located((_By.ID, 'code')))
-        except _TimeoutException:
+            code_element = WebDriverWait(driver, delay).\
+                until(EC.presence_of_element_located((By.ID, 'code')))
+        except TimeoutException:
             driver.quit()
-            if _print_messages:
+            if print_messages:
                 self._spinner.fail('Receiving an authentication code took too much time.')
 
         code = code_element.get_attribute('value')
@@ -256,7 +256,7 @@ class _RCViewConnection(_ArcGISConnection):
         return self._token
 
 
-class RCViewGeocoder(_Geocoder):
+class RCViewGeocoder(Geocoder):
     """Subclass of arcgis Geocoder connected to the RC View geocoding service."""
     def __init__(self, gis):
         if not isinstance(gis, RCViewGIS):
@@ -300,13 +300,13 @@ class RCViewGeocoder(_Geocoder):
             matches = [None] * len(addresses)
             locations = resp['locations']
             for location in locations:
-                geom = _copy.copy(location['location'])
+                geom = copy.copy(location['location'])
                 if 'spatialReference' not in geom:
                     geom['spatialReference'] = sr
                 att = location['attributes']
-                matches[location['attributes']['ResultID']] = {'geometry': _Geometry(geom),
+                matches[location['attributes']['ResultID']] = {'geometry': Geometry(geom),
                                                                "attributes" : att }
-            return _FeatureSet(features=matches, spatial_reference=sr)
+            return FeatureSet(features=matches, spatial_reference=sr)
         elif resp is not None and as_featureset == False:
             matches = [None] * len(addresses)
             locations = resp['locations']

@@ -1,12 +1,12 @@
 """Constants"""
 
-import platform as _platform
+import platform
 
-OS_WINDOWS = _platform.system() == 'Windows'
+OS_WINDOWS = platform.system() == 'Windows'
 
 # ArcPy availablity
 try:
-    import arcpy as _arcpy
+    import arcpy as _arcpy  # pylint: disable=import-error
     HAS_ARCPY = True
 except ModuleNotFoundError:
     HAS_ARCPY = False

@@ -1,21 +1,21 @@
 """Tools for summarizing demographic information."""
 
-from arcgis.features import Feature as _Feature
-from arcgis.features import FeatureLayer as _FeatureLayer
-from arcgis.geometry.filters import intersects as _intersects
-from arcgis.features.analysis import enrich_layer as _enrich_layer
+from arcgis.features import Feature
+from arcgis.features import FeatureLayer
+from arcgis.geometry.filters import intersects
+from arcgis.features.analysis import enrich_layer
 from .geometry import Polygon
 from shapely.validation import explain_validity
-from .extras import round_significant as _round_significant
-from tqdm import tqdm as _tqdm
-from .extras import RCActivityIndicator as _RCSpinner
+from .extras import round_significant
+from tqdm import tqdm
+from .extras import RCActivityIndicator as RCSpinner
 
 
 def _population_housing_enrich(areas_layer, areas_query, areas_sr, enrich_id):
     if enrich_id is None:
         raise ValueError('A feature layer item ID must be specified for the enrich_id argument.')
     # query areas
-    spinner = _RCSpinner('Retrieving areas')
+    spinner = RCSpinner('Retrieving areas')
     spinner.start()
     objectid = areas_layer.properties.objectIdField
     areas = areas_layer.query(
@@ -37,7 +37,7 @@ def _population_housing_enrich(areas_layer, areas_query, areas_sr, enrich_id):
     add_results = enrich_layer.edit_features(adds=enrich_features)
 
     # enrich with current population and housing
-    enrich_fc = _enrich_layer(enrich_layer, country='US',
+    enrich_fc = enrich_layer(enrich_layer, country='US',
                               analysis_variables=['TOTPOP_CY', 'TOTHH_CY'],
                               gis=gis)
     enrich_df = enrich_fc.query().sdf.merge(areas.sdf, left_on='origin_obj', right_on=objectid)
@@ -51,8 +51,8 @@ def _population_housing_enrich(areas_layer, areas_query, areas_sr, enrich_id):
         areas_updates.append(
             {'attributes': {
                     objectid: f.origin_obj,
-                    'population': _round_significant(f.TOTPOP_CY),
-                    'housing': _round_significant(f.TOTHH_CY),
+                    'population': round_significant(f.TOTPOP_CY),
+                    'housing': round_significant(f.TOTHH_CY),
                     'method': 'Esri enrichment'
                 }
             }
@@ -113,7 +113,7 @@ def population_housing(areas_layer, areas_query='population is null',
         return _population_housing_enrich(areas_layer, areas_query, areas_sr,
                                           enrich_id)
 
-    spinner = _RCSpinner('Retrieving areas')
+    spinner = RCSpinner('Retrieving areas')
     spinner.start()
     objectid = areas_layer.properties.objectIdField
     areas = areas_layer.query(
@@ -122,12 +122,12 @@ def population_housing(areas_layer, areas_query='population is null',
         out_sr=areas_sr)
 
     spinner.text = 'Summarizing population and housing'
-    census_layer = _FeatureLayer(url='https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Tracts_Blocks/MapServer/12')
+    census_layer = FeatureLayer(url='https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Tracts_Blocks/MapServer/12')
     areas_summary = {}
     processing_issues = False
     spinner.stop_and_persist()
     #print('  Summarizing population and housing', flush=True)
-    for i, area in _tqdm(areas.sdf.iterrows(), total=len(areas)):
+    for i, area in tqdm(areas.sdf.iterrows(), total=len(areas)):
         processing_errors = []
         processing_warnings = []
         # query census blocks intersecting area
@@ -139,7 +139,7 @@ def population_housing(areas_layer, areas_query='population is null',
             )
 
         area_bbox = area_poly.envelope.as_arcgis({'wkid': areas_sr})
-        area_filter = _intersects(area_bbox, sr=areas_sr)
+        area_filter = intersects(area_bbox, sr=areas_sr)
         census_blocks = census_layer.query(
             out_fields='OBJECTID,POP100,HU100,GEOID',
             geometry_filter=area_filter, out_sr=areas_sr)
@@ -203,16 +203,16 @@ def population_housing(areas_layer, areas_query='population is null',
 
         # update area values
         if method == 'all':
-            area.population = _round_significant(pop_all)
-            area.housing = _round_significant(hu_all)
+            area.population = round_significant(pop_all)
+            area.housing = round_significant(hu_all)
             area.method = 'all'
         elif method == 'gt50':
-            area.population = _round_significant(pop_gt50)
-            area.housing = _round_significant(hu_gt50)
+            area.population = round_significant(pop_gt50)
+            area.housing = round_significant(hu_gt50)
             area.method = 'greater than 50%'
         elif method == 'wtd':
-            area.population = _round_significant(pop_wtd)
-            area.housing = _round_significant(hu_wtd)
+            area.population = round_significant(pop_wtd)
+            area.housing = round_significant(hu_wtd)
             area.method = 'weighted'
         else:
             method = None
@@ -221,7 +221,7 @@ def population_housing(areas_layer, areas_query='population is null',
             area.drop('SHAPE', inplace=True)
             areas_summary[area[objectid]]['update_results'] = \
                 areas_layer.edit_features(
-                updates=[_Feature(attributes=area.to_dict())])['updateResults']
+                updates=[Feature(attributes=area.to_dict())])['updateResults']
 
     spinner.succeed('Finished updating areas')
     if processing_issues:

@@ -13,21 +13,31 @@ from shapely.geometry import LineString as ShapelyLineString
 from shapely.geometry import MultiLineString as ShapelyMultiLineString
 from shapely.geometry import Polygon as ShapelyPolygon
 from shapely.geometry import MultiPolygon as ShapelyMultiPolygon
-from shapely.geometry.polygon import LinearRing as _ShapelyLinearRing
-from shapely.validation import explain_validity as _explain_validity
+from shapely.geometry.polygon import LinearRing as ShapelyLinearRing
+from shapely.validation import explain_validity
 from arcgis.features import GeoAccessor, GeoSeriesAccessor
 from geopandas import GeoDataFrame
-from pandas import DataFrame as _DataFrame
-import warnings as _warnings
+from pandas import DataFrame
+import warnings
 from .constants import HAS_ARCPY
-import re as _re
+import re
 
+__all__ = [
+    'Polygon',
+    'ShapelyPoint',
+    'ShapelyMultiPoint',
+    'ShapelyLineString',
+    'ShapelyMultiLineString',
+    'ShapelyPolygon',
+    'ShapelyMultiPolygon',
+    'GeoDataFrame'
+]
 
 def _custom_formatwarning(msg, *args, **kwargs):
     # include only exception category and message
     return '{}: {}\n'.format(args[0].__name__, msg)
 
-_warnings.formatwarning = _custom_formatwarning
+warnings.formatwarning = _custom_formatwarning
 
 
 def _as_shapely2(self, fix_self_intersections=True, warn_invalid=True):
@@ -43,7 +53,7 @@ def _as_shapely2(self, fix_self_intersections=True, warn_invalid=True):
     """
     # extract exterior and interior rings
     exterior_rings, interior_rings = [], []
-    for ring in map(_ShapelyLinearRing, self.rings):
+    for ring in map(ShapelyLinearRing, self.rings):
         interior_rings.append(ring) if ring.is_ccw else exterior_rings.append(ring)
 
     # create polygons for each exterior ring
@@ -69,7 +79,7 @@ def _as_shapely2(self, fix_self_intersections=True, warn_invalid=True):
 
     # check validity and fix any self-intersecting rings
     if not poly_shp.is_valid:
-        invalid_reason = _explain_validity(poly_shp)
+        invalid_reason = explain_validity(poly_shp)
         invalid_message = 'Polygon is not valid ({})'.format(invalid_reason)
         if 'Self-intersection' in invalid_reason and fix_self_intersections:
             # fix with buffer trick
@@ -77,8 +87,8 @@ def _as_shapely2(self, fix_self_intersections=True, warn_invalid=True):
             invalid_message += '; self-intersections were automatically fixed'
         if warn_invalid:
             invalid_message += '.'
-            _warnings.simplefilter('always', UserWarning)
-            _warnings.warn(invalid_message)
+            warnings.simplefilter('always', UserWarning)
+            warnings.warn(invalid_message)
 
     return poly_shp
 
@@ -156,16 +166,16 @@ def _to_SpatialDataFrame(self, spatial_reference=None):
             if isinstance(crs, dict):
                 crs = crs['init']
             if 'epsg' in crs:
-                m = _re.search(r'epsg:(\d+)', crs)
+                m = re.search(r'epsg:(\d+)', crs)
                 if m:
                     spatial_reference = int(m.groups()[0])
 
     if not spatial_reference:
         spatial_reference = 4326
-        _warnings.simplefilter('always', UserWarning)
-        _warnings.warn('Unable to extract a spatial reference, assuming latitude/longitude (wkid 4326).')
+        warnings.simplefilter('always', UserWarning)
+        warnings.warn('Unable to extract a spatial reference, assuming latitude/longitude (wkid 4326).')
 
-    sdf = _DataFrame(data=self.drop('geometry', axis=1))
+    sdf = DataFrame(data=self.drop('geometry', axis=1))
     sdf['SHAPE'] = self.geometry.apply(_as_arcgis, spatial_reference=spatial_reference)
     sdf.spatial.set_geometry('SHAPE')
 

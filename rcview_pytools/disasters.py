@@ -1,23 +1,21 @@
 """Tools for disasters."""
 
-from arcgis import env as _env
-from arcgis.features import Feature as _Feature,\
-                            FeatureSet as _FeatureSet,\
-                            FeatureLayer as _FeatureLayer
+from arcgis import env
+from arcgis.features import Feature, FeatureSet, FeatureLayer
 from arcgis.mapping import WebMap
-from shapely.ops import unary_union as _unary_union
-from shapely.geometry import box as _ShapelyBox
+from shapely.ops import unary_union
+from shapely.geometry import box as ShapelyBox
 import re
 import json
 from .geometry import *
-from .gis import RCViewGIS as _RCViewGIS
-from .extras import RCActivityIndicator as _RCSpinner
-import warnings as _warnings
+from .gis import RCViewGIS
+from .extras import RCActivityIndicator as RCSpinner
+import warnings
 from .constants import IN_IPYTHON
 if IN_IPYTHON:
-    from tqdm import tqdm_notebook as _tqdm
+    from tqdm import tqdm_notebook as tqdm
 else:
-    from tqdm import tqdm as _tqdm
+    from tqdm import tqdm
 
 
 def _districts_description(districts_df, type):
@@ -71,20 +69,20 @@ def define_districts(type, districts_list, state=None, districts_layer=None):
                     located in the users 'Home' folder.
 
     """
-    spinner = _RCSpinner('Creating district features')
+    spinner = RCSpinner('Creating district features')
     spinner.start()
-    _warnings.simplefilter('always', UserWarning)
+    warnings.simplefilter('always', UserWarning)
 
     if type == 'counties':
         if not state:
             raise ValueError("The 'state' argument must be specified when using counties.")
-        units_layer = _FeatureLayer('http://services.arcgis.com/P3ePLMYs2RVChkJx/ArcGIS/rest/services/USA_Counties_Generalized/FeatureServer/0')
+        units_layer = FeatureLayer('http://services.arcgis.com/P3ePLMYs2RVChkJx/ArcGIS/rest/services/USA_Counties_Generalized/FeatureServer/0')
         unit_attribute = 'NAME'
     elif type == 'chapters':
-        units_layer = _FeatureLayer('https://services.arcgis.com/pGfbNJoYypmNq86F/arcgis/rest/services/2015_ARC_Chapter_Boundaries/FeatureServer/0')
+        units_layer = FeatureLayer('https://services.arcgis.com/pGfbNJoYypmNq86F/arcgis/rest/services/2015_ARC_Chapter_Boundaries/FeatureServer/0')
         unit_attribute = 'ECODE'
     elif type == 'regions':
-         units_layer = _FeatureLayer('https://services.arcgis.com/pGfbNJoYypmNq86F/arcgis/rest/services/2015_ARC_Chapter_Boundaries/FeatureServer/0')
+         units_layer = FeatureLayer('https://services.arcgis.com/pGfbNJoYypmNq86F/arcgis/rest/services/2015_ARC_Chapter_Boundaries/FeatureServer/0')
          unit_attribute = 'RCODE'
     else:
          raise ValueError("The 'type' argument must be one of 'counties', 'chapters' or 'regions'.")
@@ -93,7 +91,7 @@ def define_districts(type, districts_list, state=None, districts_layer=None):
 
     # create features
     district_features = []
-    for district, units in _tqdm(enumerate(districts_list),
+    for district, units in tqdm(enumerate(districts_list),
                                     total=len(districts_list),
                                     leave=False):
         # query units
@@ -112,11 +110,12 @@ def define_districts(type, districts_list, state=None, districts_layer=None):
         if len(unique_units) != len(units):
             warn_message = '{} not found'.format(
                 [c for c in units if c not in unique_units])
-            _warnings.warn(warn_message)
+            warnings.warn(warn_message)
 
         # create district feature
-        district_polygon = _unary_union([p.as_shapely2() for p in units_features.sdf.SHAPE])
+        district_polygon = unary_union([p.as_shapely2() for p in units_features.sdf.SHAPE])
         district_feature = dict(
+            # pylint: disable=maybe-no-member
             geometry=dict(district_polygon.as_arcgis(units_features.spatial_reference)),
             attributes={
                 'number': district + 1,
@@ -132,18 +131,19 @@ def define_districts(type, districts_list, state=None, districts_layer=None):
         spinner.start()
 
         # check for existing item name and skip creation
-        search_results = _env.active_gis.content.search(
+        # pylint: disable=maybe-no-member
+        search_results = env.active_gis.content.search(
             districts_layer, item_type='Feature Service'
         )
         if any([t.title == districts_layer for t in search_results]):
-            districts_fset = _FeatureSet(district_features)
+            districts_fset = FeatureSet(district_features)
             spinner.fail('A feature layer named "{}" already exists. Either '\
                          'specify a new name or an existing layer to update.'\
                          .format(districts_layer))
         else:
             # create layer
             try:
-                districts_item = _FeatureSet(district_features)\
+                districts_item = FeatureSet(district_features)\
                                  .sdf.spatial.to_featurelayer(
                                      title=districts_layer,
                                      tags='districts'
@@ -157,10 +157,10 @@ def define_districts(type, districts_list, state=None, districts_layer=None):
                 r = districts_item.update(_districts_description(districts_fset.sdf, type))
                 spinner.succeed('Created ' + districts_layer + ' layer')
             except Exception as e:
-                districts_fset = _FeatureSet(district_features)
+                districts_fset = FeatureSet(district_features)
                 spinner.fail('Failed to create layer: {}'.format(e))
 
-    elif isinstance(districts_layer, _FeatureLayer):
+    elif isinstance(districts_layer, FeatureLayer):
         # update existing feature layer
         spinner.text = 'Updating districts layer'
         spinner.start()
@@ -171,24 +171,25 @@ def define_districts(type, districts_list, state=None, districts_layer=None):
                    all([d['success'] for d in del_results['deleteResults']]):
                 # update description
                 districts_fset = districts_layer.query()
-                districts_item = _env.active_gis.content.get(
+                # pylint: disable=maybe-no-member
+                districts_item = env.active_gis.content.get(
                     districts_layer.properties.serviceItemId)
                 r = districts_item.update(_districts_description(districts_fset.sdf, type))
                 spinner.succeed('Updated districts layer')
             else:
-                districts_fset = _FeatureSet(district_features)
+                districts_fset = FeatureSet(district_features)
                 spinner.fail('Unable to update districts layer, please try again')
         except Exception as e:
-            districts_fset = _FeatureSet(district_features)
+            districts_fset = FeatureSet(district_features)
             spinner.fail('Failed to update layer: {}'.format(e))
 
     elif districts_layer:
         spinner.warn('The districts_layer argument must be a FeatureLayer, '\
                      'string, or None; No feature layer was created or updated')
-        districts_fset = _FeatureSet(district_features)
+        districts_fset = FeatureSet(district_features)
 
     else:
-        districts_fset = _FeatureSet(district_features)
+        districts_fset = FeatureSet(district_features)
         spinner.succeed('Created district features')
 
     return districts_fset
@@ -212,7 +213,7 @@ def initialize_dro(
     dir_template_id  Item ID of director's brief story map template.
     """
     # create DRO folder
-    spinner = _RCSpinner('Creating folder')
+    spinner = RCSpinner('Creating folder')
     spinner.start()
     folders = gis.users.me.folders
     if not dro_id in [f['title'] for f in folders]:
@@ -225,7 +226,7 @@ def initialize_dro(
 
     # copy DRO features template
     spinner.text = 'Copying features template'
-    dro_id_under = re.sub('\W+', '_', dro_id)
+    dro_id_under = re.sub(r'\W+', '_', dro_id)
     dro_template_item = gis.content.get(dro_template_id)
     dro_fgdb = dro_template_item.copy(title=dro_id_under + '_Features')
     move_result = dro_fgdb.move(dro_folder)
@@ -308,7 +309,7 @@ def initialize_dro(
 def _cell_polygon(x_cell, y_cell, cell_size, x_min, y_min, spatial_ref):
     x_org = x_min - cell_size / 2
     y_org = y_min - cell_size / 2
-    box = _ShapelyBox(
+    box = ShapelyBox(
         minx=x_cell * cell_size + x_org,
         miny=y_cell * cell_size + y_org,
         maxx=x_cell * cell_size + x_org + cell_size,
@@ -338,7 +339,7 @@ def grid_dda(dda, dda_grid_layer, grid_size=250, verbose=True):
               'adds' -- dictionary of add results to the grid layer
     """
     if verbose:
-        spinner = _RCSpinner('Creating grid summary')
+        spinner = RCSpinner('Creating grid summary')
         spinner.start()
     # count DDAs within grid
     dda_sdf = dda.sdf

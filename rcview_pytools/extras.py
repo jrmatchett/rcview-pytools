@@ -1,12 +1,12 @@
 """Various classes and functions for working with GIS data."""
 
-import os as _os
-import urllib as _urllib
+import os
+import urllib
 import string
-import mgrs as _mgrs
-import numpy as _numpy
+import mgrs
+import numpy
 from .constants import OS_WINDOWS, IN_IPYTHON
-from halo import Halo as _Halo
+from halo import Halo
 from arcgis.gis import Item
 from arcgis.geocoding import geocode
 from arcgis.geometry import Point
@@ -26,7 +26,7 @@ def round_significant(x, p=2):
     elif x < 0:
         raise ValueError('Value must be positive.')
     else:
-        return _numpy.around(x, -int(_numpy.floor(_numpy.log10(x))) + (p - 1))
+        return numpy.around(x, -int(numpy.floor(numpy.log10(x))) + (p - 1))
 
 
 def fix_fgdb_files(dir):
@@ -37,9 +37,9 @@ def fix_fgdb_files(dir):
     Arguments:
     dir  Directory containing the geodatabase files.
     """
-    _os.chdir(dir)
-    for file in _os.listdir():
-        _os.rename(file, file.split('\\')[1])
+    os.chdir(dir)
+    for file in os.listdir():
+        os.rename(file, file.split('\\')[1])
 
 
 def google_maps_url(latitude, longitude):
@@ -62,7 +62,7 @@ def apple_maps_url(latitude, longitude, label='X'):
     label      Text label for map point.
     """
     return 'http://maps.apple.com/?ll={0:2.5f},{1:3.5f}&q={2:s}'.format(
-        latitude, longitude, _urllib.parse.quote(label))
+        latitude, longitude, urllib.parse.quote(label))
 
 
 def latlon_to_usng(latitude, longitude, precision=4):
@@ -75,7 +75,7 @@ def latlon_to_usng(latitude, longitude, precision=4):
     longitude  Longitude in decimal degrees.
     precision  Grid value precision.
     """
-    m = _mgrs.MGRS()
+    m = mgrs.MGRS()
     usng = m.toMGRS(latitude, longitude, MGRSPrecision=precision).decode('ascii')
     usng_fmt = []
     usng_fmt.append(usng[0:3])
@@ -95,7 +95,7 @@ def usng_to_latlon(usng):
     Arguments:
     usng  A US National Grid value.
     """
-    m = _mgrs.MGRS()
+    m = mgrs.MGRS()
     return m.toLatLon(usng.replace(' ', '').encode('ascii'))
 
 
@@ -158,7 +158,7 @@ if IN_IPYTHON:
                 self._symbol, self._text, '…' if self._active else ''))
 
 else:
-    class RCActivityIndicator(_Halo):
+    class RCActivityIndicator(Halo):
         """An activity indicator."""
         def __init__(self, text='Processing'):
             """Construct a Red Cross activity indicator.
