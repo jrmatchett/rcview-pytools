@@ -51,8 +51,8 @@ class RCViewGIS(_GIS):
                       Reusing previous tokens skips the full authentication
                       process.
         tokens        (optional) A dictionary containing access tokens, having
-                      keys RCVIEW_TOKEN and RCVIEW_REFRESH with values for
-                      the token and refresh token, respectively.
+                      keys RCVIEW_CLIENT, RCVIEW_TOKEN and RCVIEW_REFRESH with
+                      values for the client id, token, and refresh token.
         verbose       Prints login status messages.
         """
         global _print_messages
@@ -100,6 +100,7 @@ class RCViewGIS(_GIS):
                     'token': tokens['RCVIEW_TOKEN'],
                     'refresh_token': tokens['RCVIEW_REFRESH']
                 }
+                self._client_id = tokens['RCVIEW_CLIENT']
             except:
                 print('Error using provided tokens, trying user/password authentication.', flush=True)
 
