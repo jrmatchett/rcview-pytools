@@ -160,7 +160,7 @@ def to_SpatialDataFrame(self, spatial_reference=None, use_as_arcgis=False):
     else:
         spatial_reference = {'wkid': spatial_reference}
 
-    sdf = DataFrame(data=self.drop('geometry', axis=1))
+    sdf = DataFrame(data=self.drop(self.geometry.name, axis=1))
     if use_as_arcgis:
         sdf['SHAPE'] = [g.as_arcgis(spatial_reference) for g in self.geometry.tolist()]
     else:
