@@ -10,6 +10,9 @@ from arcgis.geometry import Geometry
 from six.moves.urllib_parse import urlencode
 import copy
 import tempfile
+import requests
+import io
+import pandas as pd
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
@@ -262,11 +265,14 @@ class RCViewGeocoder(Geocoder):
         if not isinstance(gis, RCViewGIS):
             raise TypeError('gis parameter must be an RCViewGIS object.')
         super().__init__('https://maps.rcview.redcross.org/portal/sharing/servers/da9228b803884dda94df19c2f9d83deb/rest/services/World/GeocodeServer', gis)
+
     def batch_geocode(self, addresses, as_featureset=False, **kwargs):
         """Alternative batch geocoding method which allows specification of additional
         REST API parameters as keyword arguments. See
         https://developers.arcgis.com/rest/geocode/api-reference/geocoding-geocode-addresses.htm
         for details.
+
+        WARNING: This method consumes service credits, so please use judiciously.
         """
         url = self.url + "/geocodeAddresses"
         params = {'f': 'json'}
@@ -315,3 +321,113 @@ class RCViewGeocoder(Geocoder):
             return matches
         else:
             return []
+
+    def census_geocode(self, addresses, return_type='list'):
+        """Geocodes addresses using the US Census Bureau's batch geocoding
+        service.
+
+        Addresses without a match are subsequently geocoded with the RC View
+        service. This method reduces service credits consumption, but is
+        much slower than Esri's service. Around 20% of addresses fail to
+        match using the US Census service.
+
+        Arguments:
+        addresses    A list of addresses. Each address must be a dictionary
+                     with 'Address', 'City', 'Region' (2-letter state), and
+                     'Postal' (zipcode) items. Maximum list size is 1000.
+        return_type  'list' returns a list of dictionaries, while 'sdf'
+                     returns an arcgis spatially-enabled dataframe.
+
+        Returns:  A list of dictionaries, each containing 'address',
+                  'match_type', 'source', and 'location' items; or a
+                  spatially-enabled dataframe with 'address', 'match_type',
+                  'source', and 'SHAPE' columns.
+        """
+        # check batch size limit
+        if len(addresses) > 1000:
+            raise ValueError('Number of addresses must not exceed 1000.')
+
+        # batch geocode with US Census Bureau service
+        adds_df = pd.DataFrame(addresses)
+        with tempfile.NamedTemporaryFile(suffix='.csv') as f:
+            adds_df.to_csv(
+                f.name,
+                columns=['Address', 'City', 'Region', 'Postal'],
+                header=False
+            )
+            census_gc = requests.post(
+                url='https://geocoding.geo.census.gov/geocoder/locations/addressbatch',
+                params={'returntype': 'locations', 'benchmark': 'Public_AR_Current'},
+                files={'addressFile': f}
+            )
+        census_df = pd.read_csv(
+            io.StringIO(census_gc.text),
+            header=None,
+            names=['id','input_address','match_indicator','match_type','match_address','lon_lat','tigerline_id','tigerline_side']
+        )
+        adds_df = adds_df.join(census_df[['id', 'match_indicator', 'match_type', 'match_address', 'lon_lat']].set_index('id'))
+
+        # create output list
+        adds_out = []
+        for _, a in adds_df.iterrows():
+            if pd.isnull(a.match_address):
+                # geocode address with RC View service
+                rcv_gc = self._geocode(
+                    dict(a[['Address', 'City', 'Region', 'Postal']]),
+                    max_locations=1,
+                    for_storage=False,
+                    out_sr=4326
+                )
+                if rcv_gc:
+                    rcv_gc0 = rcv_gc[0]
+                    gc_atts = rcv_gc0['attributes']
+                    add_comps = []
+                    if gc_atts['StAddr'] != '':
+                        add_comps.append(gc_atts['StAddr'])
+                    if gc_atts['City'] != '':
+                        add_comps.append(gc_atts['City'])
+                    if gc_atts['RegionAbbr'] != '':
+                        add_comps.append(gc_atts['RegionAbbr'])
+                    if gc_atts['Postal'] != '':
+                        add_comps.append(gc_atts['Postal'])
+                    add_dict = {
+                        'address': ', '.join(add_comps).upper(),
+                        'match_type': gc_atts['Addr_type'],
+                        'source': 'Esri',
+                        'location': {
+                            'x': round(rcv_gc0['location']['x'], 6),
+                            'y': round(rcv_gc0['location']['y'], 6),
+                            'spatialReference': {'wkid': 4326}
+                        }
+                    }
+                else: # no address match
+                    add_dict = {
+                        'address': None,
+                        'match_type': 'No_Match',
+                        'source': 'Esri',
+                        'location': None
+                    }
+            else:
+                # US Census match
+                coords = a.lon_lat.split(',')
+                add_dict = {
+                    'address': a.match_address,
+                    'match_type': a.match_type,
+                    'source': 'US Census',
+                    'location': {
+                        'x': float(coords[0]),
+                        'y': float(coords[1]),
+                        'spatialReference': {'wkid': 4326}
+                    }
+                }
+            adds_out.append(add_dict)
+
+        if return_type == 'sdf':
+            from arcgis.features import GeoAccessor, GeoSeriesAccessor
+            adds_sdf = pd.DataFrame(adds_out)
+            adds_sdf['SHAPE'] = adds_sdf.location.apply(lambda l: Geometry(l))
+            del adds_sdf['location']
+            adds_sdf.spatial.set_geometry('SHAPE')
+            return adds_sdf
+        else:
+            return adds_out

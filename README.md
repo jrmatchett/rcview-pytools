@@ -30,7 +30,7 @@ For additional guidance on interacting with an ArcGIS portal, see the [ArcGIS Py
 
 * `gis` provides the `RCViewGIS` class, which is a subclass of the `arcgis` `GIS` class connected specifically to the RC View mapping portal.
 
-* `geometry` extends `arcgis` and `shapely` polygon classes. As of version 1.6, the `arcgis` package does not properly handle polygons with interior holes unless Esri's proprietary `arcpy` package is available. This module provides an `as_shapely2` method for the `arcgis` `Polygon` class, correctly handling interior holes. It also adds an `as_arcgis` method for `shapely` `Polygon` and `MultiPolygon` classes, so those objects can be converted back to `arcgis` polygons.
+* `geometry` extends `arcgis` and `shapely` polygon classes. This module provides an `as_shapely2` method for the `arcgis` `Polygon` class, correctly handling interior holes. It also adds an `as_arcgis` method for `shapely` `Polygon` and `MultiPolygon` classes, so those objects can be converted back to `arcgis` polygons. Also includes a `to_SpatialDataFrame` method for converting a `geopandas` `GeoDataFrame` to an `arcgis` spatially-enabled dataframe.
 
 * `demographics` contains functions for summarizing demographic information, such as determining the population and housing units within areas impacted by a disaster.
 

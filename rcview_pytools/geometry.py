@@ -16,11 +16,10 @@ from shapely.geometry import MultiPolygon as ShapelyMultiPolygon
 from shapely.geometry.polygon import LinearRing as ShapelyLinearRing
 from shapely.validation import explain_validity
 from arcgis.features import GeoAccessor, GeoSeriesAccessor
-from geopandas import GeoDataFrame
 from pandas import DataFrame
+from geopandas import GeoDataFrame
 import warnings
-from .constants import HAS_ARCPY
-import re
+
 
 __all__ = [
     'Polygon',
@@ -33,14 +32,15 @@ __all__ = [
     'GeoDataFrame'
 ]
 
-def _custom_formatwarning(msg, *args, **kwargs):
+
+def custom_formatwarning(msg, *args, **kwargs):
     # include only exception category and message
     return '{}: {}\n'.format(args[0].__name__, msg)
 
-warnings.formatwarning = _custom_formatwarning
+warnings.formatwarning = custom_formatwarning
 
 
-def _as_shapely2(self, fix_self_intersections=True, warn_invalid=True):
+def as_shapely2(self, fix_self_intersections=True, warn_invalid=True):
     """Return a Shapely [Mulit]Polygon.
 
     Alternative to arcgis as_shapely which handles polygons with holes and fixes
@@ -92,23 +92,10 @@ def _as_shapely2(self, fix_self_intersections=True, warn_invalid=True):
 
     return poly_shp
 
-Polygon.as_shapely2 = _as_shapely2
+Polygon.as_shapely2 = as_shapely2
 
 
-def _as_shapely(self):
-    """Return a Shapely [Multi]Polygon.
-
-    Overrides the arcgis method, returning a properly-constructed Shapely
-    geometry using the as_shapely2 method. Self-intersecting rings are not
-    automatically fixed.
-    """
-    return self.as_shapely2(False, True)
-
-if not HAS_ARCPY:
-    Polygon.as_shapely = property(_as_shapely)
-
-
-def _as_arcgis(self, spatial_reference):
+def as_arcgis(self, spatial_reference):
     """Return an arcgis Geometry.
 
     Arguments:
@@ -142,43 +129,44 @@ def _as_arcgis(self, spatial_reference):
 
     return geom
 
-ShapelyPoint.as_arcgis = _as_arcgis
-ShapelyMultiPoint.as_arcgis = _as_arcgis
-ShapelyLineString.as_arcgis = _as_arcgis
-ShapelyMultiLineString.as_arcgis = _as_arcgis
-ShapelyPolygon.as_arcgis = _as_arcgis
-ShapelyMultiPolygon.as_arcgis = _as_arcgis
+ShapelyPoint.as_arcgis = as_arcgis
+ShapelyMultiPoint.as_arcgis = as_arcgis
+ShapelyLineString.as_arcgis = as_arcgis
+ShapelyMultiLineString.as_arcgis = as_arcgis
+ShapelyPolygon.as_arcgis = as_arcgis
+ShapelyMultiPolygon.as_arcgis = as_arcgis
 
 
-def _to_SpatialDataFrame(self, spatial_reference=None):
+def to_SpatialDataFrame(self, spatial_reference=None, use_as_arcgis=False):
     """Return an arcgis spatially-enabled data frame.
 
     Arguments:
-    spatial_reference  Either None (the default), a spatial reference integer
-                       code, or a definition dictionary (for example
-                       {'wkid': 3857}). If None, the spatial reference will be
-                       extracted from the GeoDataFrame if it is defined using an
-                       EPSG code.
+    spatial_reference  Either None or an EPSG integer code. If None, the
+                       spatial reference will be extracted from the GeoDataFrame
+                       if it is defined using an EPSG code.
+    use_as_arcgis      Use the as_arcgis Shapely methods defined in this module
+                       for converting geometries, otherwise uses the arcgis Geometry
+                       class's from_shapely method.
     """
     if not spatial_reference:
         crs = self.crs
-        if crs and 'init' in crs:
-            if isinstance(crs, dict):
-                crs = crs['init']
-            if 'epsg' in crs:
-                m = re.search(r'epsg:(\d+)', crs)
-                if m:
-                    spatial_reference = int(m.groups()[0])
-
-    if not spatial_reference:
-        spatial_reference = 4326
-        warnings.simplefilter('always', UserWarning)
-        warnings.warn('Unable to extract a spatial reference, assuming latitude/longitude (wkid 4326).')
+        epsg_code = crs.to_epsg()
+        if epsg_code:
+            spatial_reference = {'wkid': epsg_code}
+        else:
+            spatial_reference = {'wkid': 4326}
+            warnings.simplefilter('always', UserWarning)
+            warnings.warn('Unable to extract a spatial reference, assuming latitude/longitude (wkid 4326).')
+    else:
+        spatial_reference = {'wkid': spatial_reference}
 
     sdf = DataFrame(data=self.drop('geometry', axis=1))
-    sdf['SHAPE'] = self.geometry.apply(_as_arcgis, spatial_reference=spatial_reference)
+    if use_as_arcgis:
+        sdf['SHAPE'] = [g.as_arcgis(spatial_reference) for g in self.geometry.tolist()]
+    else:
+        sdf['SHAPE'] = [Geometry.from_shapely(g, spatial_reference) for g in self.geometry.tolist()]
     sdf.spatial.set_geometry('SHAPE')
 
     return sdf
 
-GeoDataFrame.to_SpatialDataFrame = _to_SpatialDataFrame
+GeoDataFrame.to_SpatialDataFrame = to_SpatialDataFrame
