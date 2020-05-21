@@ -202,7 +202,7 @@ class _RCViewConnection(_ArcGISConnection):
         codeurl = "{}?{}".format(url, paramstring)
 
         options = Options()
-        options.add_argument('--headless')
+        #options.add_argument('--headless')
         options.add_argument('--log-level=3')
         driver = webdriver.Chrome(options=options)
         driver.get(codeurl)
@@ -210,7 +210,7 @@ class _RCViewConnection(_ArcGISConnection):
         delay = 10
         try:
             using_redcross_element = WebDriverWait(driver, delay).\
-                until(EC.presence_of_element_located((By.ID, 'idp_Name')))
+                until(EC.presence_of_element_located((By.XPATH, '/html/body/div/div/div[2]/div/div[2]/section[1]/div/div/div[2]/div')))
         except TimeoutException:
             driver.quit()
             if print_messages:
