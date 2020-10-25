@@ -210,7 +210,7 @@ class _RCViewConnection(_ArcGISConnection):
         delay = 10
         try:
             using_redcross_element = WebDriverWait(driver, delay).\
-                until(EC.presence_of_element_located((By.XPATH, '/html/body/div/div/div[2]/div/div[2]/section[1]/div/div/div[2]/div')))
+                until(EC.presence_of_element_located((By.XPATH, '//*[@id="enterprisePanel"]/div/div')))
         except TimeoutException:
             driver.quit()
             if print_messages:

@@ -197,7 +197,7 @@ def define_districts(type, districts_list, state=None, districts_layer=None):
 
 def initialize_dro(
     dro_id, gis,
-    dro_template_id='2df64ef2bc874bdb8393255375feb894',
+    dro_template_id='19ecca09a38b445aa43841e7db4d0515',
     sit_template_id='a1dbcdad380840249d26ccc520d1c441',
     ops_template_id='e9c20858fdb342c9a6b0e514e7c9f9f7',
     dir_template_id='9e36639d9da741138b475e05b2f79f14'
