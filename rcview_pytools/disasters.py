@@ -10,6 +10,13 @@ import json
 from .geometry import *
 from .gis import RCViewGIS
 from .extras import RCActivityIndicator as RCSpinner
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import TimeoutException
+from urllib.parse import urlencode
 import warnings
 from .constants import IN_IPYTHON
 if IN_IPYTHON:
@@ -198,20 +205,27 @@ def define_districts(type, districts_list, state=None, districts_layer=None):
 def initialize_dro(
     dro_id, gis,
     dro_template_id='19ecca09a38b445aa43841e7db4d0515',
-    sit_template_id='a1dbcdad380840249d26ccc520d1c441',
+    sit_map_template_id='55f5ec920b614e188074d53af564feca',
+    sit_app_template_id='7f28edde49474819beaec5c61ee3f496',
     ops_template_id='e9c20858fdb342c9a6b0e514e7c9f9f7',
     dir_template_id='9e36639d9da741138b475e05b2f79f14'
     ):
     """Initializes mapping items for a disaster relief operation.
 
     Arguments:
-    dro_id           Disaster relief operation identifier.
+    dro_id           Disaster relief operation identifier formatted as 'DR 000-00'.
     gis              RCViewGIS object.
     dro_template_id  Item ID of DRO feature file geodatabase template.
-    sit_template_id  Item ID of situational awareness web map template.
+    sit_map_template_id  Item ID of situational awareness web map template.
+    sit_app_template_id  Item ID of situational awareness web app template.
     ops_template_id  Item ID of operations dashboard template.
     dir_template_id  Item ID of director's brief story map template.
     """
+    if (not gis._password) or (gis._password == 'none'):
+        raise RuntimeError('The RCViewGIS object must include the account password. Please set it by using gis._password = "YOUR_PASSWORD".')
+
+    dro_tags = {'tags': [dro_id, dro_id.replace(' ', ''), dro_id.replace('DR ', '')]}
+
     # create DRO folder
     spinner = RCSpinner('Creating folder')
     spinner.start()
@@ -219,7 +233,7 @@ def initialize_dro(
     if not dro_id in [f['title'] for f in folders]:
         dro_folder = gis.content.create_folder(dro_id)
         if not dro_folder:
-            spinner.fail('Failed to create DRO folder. Intialization aborted.')
+            spinner.fail('Failed to create DRO folder. Initialization aborted.')
             return
     else:
         dro_folder = [f for f in folders if f['title'] == dro_id][0]
@@ -231,7 +245,7 @@ def initialize_dro(
     dro_fgdb = dro_template_item.copy(title=dro_id_under + '_Features')
     move_result = dro_fgdb.move(dro_folder)
     if not move_result['success']:
-        spinner.fail('Failed to move features template to DRO folder. Intialization aborted.')
+        spinner.fail('Failed to move features template to DRO folder. Initialization aborted.')
         return
 
     # publish DRO feature service
@@ -240,27 +254,97 @@ def initialize_dro(
     if not dro_features:
         spinner.fail('Failed to publish DRO feature service. Initialization aborted.')
         return
+    _ = dro_features.update(dro_tags)
+
+    # TODO: Add a few blank time periods to the operations table
 
     # create situational awareness map
     spinner.text = 'Creating situational awareness map'
-    sit_template_item = gis.content.get(sit_template_id)
-    sit_map_item = sit_template_item.copy(title=dro_id + ' Situational Awareness Map')
+    sit_map_template_item = gis.content.get(sit_map_template_id)
+    sit_map_item = sit_map_template_item.copy(title=dro_id + ' Situational Awareness Map')
     if not sit_map_item:
         spinner.fail('Failed to copy situational awareness map. Initialization aborted.')
         return
     move_result = sit_map_item.move(dro_folder)
     if not move_result['success']:
-        spinner.fail('Failed to move situational awareness map to DRO folder. Intialization aborted.')
+        spinner.fail('Failed to move situational awareness map to DRO folder. Initialization aborted.')
         return
-    sit_map = WebMap(sit_map_item)
-    add_result = sit_map.add_layer(dro_features)
-    if not add_result:
-        spinner.fail('Failed to add features to situational awareness map. Initialization aborted.')
+    _ = sit_map_item.update(dro_tags)
+    # sit_map = WebMap(sit_map_item)
+    # add_result = sit_map.add_layer(dro_features)
+    # if not add_result:
+    #     spinner.fail('Failed to add features to situational awareness map. Initialization aborted.')
+    #     return
+    # update_result = sit_map.update()
+    # if not update_result:
+    #     spinner.fail('Failed to update situational awareness map. Initialization aborted.')
+    #     return
+
+    # create situational awareness app
+    # NOTE: Web AppBuilder apps don't initialize correctly when copied from another app,
+    # so have to create new app via web interface.
+    spinner.text = 'Creating situational awareness app'
+    wab_params = {
+        'title': dro_id + ' Situational Awareness App',
+        'tags': dro_id,
+        'summary': f'Situational awareness web map application for {dro_id}.',
+        'folder': dro_folder['id'],
+        'appType': 'HTML'
+    }
+    wab_url = f"{gis.url}/apps/webappbuilder/index.html?{urlencode(wab_params)}".replace('+', '%20')
+
+    driver = webdriver.Chrome()
+    driver.get(wab_url)
+
+    delay = 60
+    try:
+        using_redcross_element = WebDriverWait(driver, delay).\
+            until(EC.presence_of_element_located((By.XPATH, '//*[@id="enterprisePanel"]/div/div')))
+    except TimeoutException:
+        spinner.fail('Failed to log into RC View. Initialization aborted.')
+        driver.quit()
         return
-    update_result = sit_map.update()
+
+    using_redcross_element.click()
+
+    try:
+        username_element = WebDriverWait(driver, delay).\
+            until(EC.presence_of_element_located((By.XPATH, '/html/body/main/div[4]/div/div/div/div/div/div/div/div[1]/div/div/div/div[4]/input')))
+        password_element = WebDriverWait(driver, delay).\
+            until(EC.presence_of_element_located((By.XPATH, '/html/body/main/div[4]/div/div/div/div/div/div/div/div[1]/div/div/div/div[5]/input')))
+        signin_element = WebDriverWait(driver, delay).\
+            until(EC.presence_of_element_located((By.XPATH, '/html/body/main/div[4]/div/div/div/div/div/div/div/div[1]/div/div/div/div[6]/button')))
+    except TimeoutException:
+        spinner.fail('Failed to log into RC View. Initialization aborted.')
+        driver.quit()
+        return
+
+    username_element.send_keys(gis._username)
+    password_element.send_keys(gis._password)
+    signin_element.click()
+    # wait until WAB editor loaded
+    try:
+        _ = WebDriverWait(driver, delay).\
+            until(EC.presence_of_element_located((By.LINK_TEXT, 'Launch')))
+    except TimeoutException:
+        spinner.fail('Failed to create situational awareness app. Initialization aborted.')
+        driver.quit()
+        return
+
+    sit_app_url = driver.current_url.replace('webappbuilder', 'webappviewer')
+    driver.close()
+
+    sit_app_template_item = gis.content.get(sit_app_template_id)
+    sit_app_item = gis.content.get(sit_app_url.split('?id=')[1])
+    sit_app_template_data = sit_app_template_item.get_data()
+    sit_app_template_data['title'] = dro_id + ' Situational Awareness'
+    sit_app_template_data['map']['itemId'] = sit_map_item.itemid
+    sit_app_template_data['logo'] = sit_app_template_data['logo'].replace('${itemId}', sit_app_template_id)
+    update_result = sit_app_item.update(data=json.dumps(sit_app_template_data))
     if not update_result:
-        spinner.fail('Failed to update situational awareness map. Initialization aborted.')
+        spinner.fail('Failed to update situational awareness app. Initialization aborted.')
         return
+    _ = sit_app_item.update(dro_tags)
 
     # create operations dashboard
     spinner.text = 'Creating operations dashboard'
@@ -268,7 +352,7 @@ def initialize_dro(
     ops_item = ops_template_item.copy(title=dro_id + ' Operations Dashboard')
     move_result = ops_item.move(dro_folder)
     if not move_result['success']:
-        spinner.fail('Failed to move operations dashboard to DRO folder. Intialization aborted.')
+        spinner.fail('Failed to move operations dashboard to DRO folder. Initialization aborted.')
         return
     ops_template_data = ops_template_item.get_data()
     ops_table = dro_features.tables[0]
@@ -280,19 +364,20 @@ def initialize_dro(
         dataSource['layerId'] = ops_table_id
     update_result = ops_item.update(data=json.dumps(ops_template_data))
     if not update_result:
-        spinner.fail('Failed to update operations dashboard. Intialization aborted.')
+        spinner.fail('Failed to update operations dashboard. Initialization aborted.')
         return
+    _ = ops_item.update(dro_tags)
 
     # create director's brief
     dir_template_item = gis.content.get(dir_template_id)
     dir_item = dir_template_item.copy(title=dro_id + " Director's Brief")
     move_result = dir_item.move(dro_folder)
     if not move_result['success']:
-        spinner.fail("Failed to move director's brief to DRO folder. Intialization aborted.")
+        spinner.fail("Failed to move director's brief to DRO folder. Initialization aborted.")
         return
     dir_template_data = dir_template_item.get_data()
     dir_template_data['values']['title'] = dro_id + " Relief Operation Director's Brief"
-    dir_template_data['values']['story']['entries'][0]['media']['webmap']['id'] = sit_map_item.id
+    dir_template_data['values']['story']['entries'][0]['media']['webpage']['url'] = sit_app_url
     dir_template_data['values']['story']['entries'][1]['media']['webpage']['hash'] = '/' + ops_item.id
     dir_template_data['values']['story']['entries'][1]['media']['webpage']['url'] = 'https://maps.rcview.redcross.org/portal/apps/opsdashboard/index.html#/' + ops_item.id
     update_result = dir_item.update(
@@ -300,8 +385,9 @@ def initialize_dro(
         data=json.dumps(dir_template_data)
     )
     if not update_result:
-        spinner.fail("Failed to update director's brief. Intialization aborted.")
+        spinner.fail("Failed to update director's brief. Initialization aborted.")
         return
+    _ = dir_item.update(dro_tags)
 
     spinner.succeed('Finished initializing DRO.')
 
